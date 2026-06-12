@@ -13,16 +13,40 @@ interface PostCardProps {
 
 export default function PostCard({ post, addToast }: PostCardProps) {
   const [commentsOpen, setCommentsOpen] = useState(false);
-  const utils = trpc.useUtils();
+  // Optimistic local state — don't rely on server refetch (serverless is stateless)
+  const [likesCount, setLikesCount] = useState(post.likesCount);
+  const [isLiked, setIsLiked] = useState(false);
+  const [repostCount, setRepostCount] = useState(0);
+  const [isReposted, setIsReposted] = useState(false);
 
   const toggleLike = trpc.posts.toggleLike.useMutation({
     onSuccess: (data) => {
-      utils.posts.list.invalidate();
-      addToast(data.liked ? 'Te gusto el post' : 'Quitaste tu like', 'success');
+      addToast(data.liked ? 'Te gusto el post!' : 'Quitaste tu like', 'success');
+    },
+    onError: (err) => {
+      // Revert optimistic update
+      setIsLiked((prev) => !prev);
+      setLikesCount((prev) => isLiked ? prev + 1 : Math.max(0, prev - 1));
+      addToast(`Error: ${err.message}`, 'error');
     },
   });
 
   const handle = post.authorName?.toLowerCase().replace(/\s/g, '') ?? 'dev';
+
+  function handleLike() {
+    // Apply optimistic update immediately
+    const nowLiked = !isLiked;
+    setIsLiked(nowLiked);
+    setLikesCount((prev) => nowLiked ? prev + 1 : Math.max(0, prev - 1));
+    toggleLike.mutate({ postId: post.id });
+  }
+
+  function handleRepost() {
+    const nowReposted = !isReposted;
+    setIsReposted(nowReposted);
+    setRepostCount((prev) => nowReposted ? prev + 1 : Math.max(0, prev - 1));
+    addToast(nowReposted ? 'Reposteado!' : 'Repost eliminado', 'success');
+  }
 
   return (
     <article className="border-b border-[#2A3347] p-4 hover:bg-[#151A27]/50 transition-colors">
@@ -79,24 +103,31 @@ export default function PostCard({ post, addToast }: PostCardProps) {
               onClick={() => setCommentsOpen((v) => !v)}
               className="flex items-center gap-2 text-[#5A6680] hover:text-[#3B82F6] transition-colors group"
             >
-              <div className="p-2 rounded-full group-hover:bg-[#3B82F6]/10"><MessageCircle size={18} /></div>
+              <div className="p-2 rounded-full group-hover:bg-[#3B82F6]/10">
+                <MessageCircle size={18} className={commentsOpen ? 'text-[#3B82F6]' : ''} />
+              </div>
               <span className="text-sm">{post.commentsCount}</span>
             </button>
 
             <button
-              onClick={() => addToast('Reposteado!', 'success')}
-              className="flex items-center gap-2 text-[#5A6680] hover:text-[#22C55E] transition-colors group"
+              onClick={handleRepost}
+              className={`flex items-center gap-2 transition-colors group ${isReposted ? 'text-[#22C55E]' : 'text-[#5A6680] hover:text-[#22C55E]'}`}
             >
-              <div className="p-2 rounded-full group-hover:bg-[#22C55E]/10"><Repeat2 size={18} /></div>
-              <span className="text-sm">0</span>
+              <div className="p-2 rounded-full group-hover:bg-[#22C55E]/10">
+                <Repeat2 size={18} />
+              </div>
+              <span className="text-sm">{repostCount}</span>
             </button>
 
             <button
-              onClick={() => toggleLike.mutate({ postId: post.id })}
-              className="flex items-center gap-2 text-[#5A6680] hover:text-[#EF4444] transition-colors group"
+              onClick={handleLike}
+              disabled={toggleLike.isPending}
+              className={`flex items-center gap-2 transition-colors group ${isLiked ? 'text-[#EF4444]' : 'text-[#5A6680] hover:text-[#EF4444]'}`}
             >
-              <div className="p-2 rounded-full group-hover:bg-[#EF4444]/10"><Heart size={18} /></div>
-              <span className="text-sm">{post.likesCount}</span>
+              <div className="p-2 rounded-full group-hover:bg-[#EF4444]/10">
+                <Heart size={18} className={isLiked ? 'fill-[#EF4444]' : ''} />
+              </div>
+              <span className="text-sm">{likesCount}</span>
             </button>
 
             <button

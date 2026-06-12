@@ -1,7 +1,15 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { trpc } from '@/providers/trpc';
 import { formatDate } from '@/lib/utils';
 import type { Toast } from '@/hooks/useToast';
+type CommentRow = {
+  id: number;
+  content: string;
+  createdAt: Date;
+  authorId: number;
+  authorName: string | null;
+  authorAvatar: string | null;
+};
 
 interface CommentSectionProps {
   postId: number;
@@ -11,35 +19,64 @@ interface CommentSectionProps {
 
 export default function CommentSection({ postId, isOpen, addToast }: CommentSectionProps) {
   const [commentText, setCommentText] = useState('');
-  const utils = trpc.useUtils();
+  // Local list lets us add comments instantly without depending on server refetch
+  const [localComments, setLocalComments] = useState<CommentRow[]>([]);
+  const [serverLoaded, setServerLoaded] = useState(false);
 
-  const { data: commentList } = trpc.comments.list.useQuery(
+  const { data: serverComments } = trpc.comments.list.useQuery(
     { postId },
     { enabled: isOpen }
   );
 
+  // Seed local comments from server data once (first load only)
+  useEffect(() => {
+    if (serverComments && !serverLoaded) {
+      setLocalComments(serverComments);
+      setServerLoaded(true);
+    }
+  }, [serverComments, serverLoaded]);
+
   const createComment = trpc.comments.create.useMutation({
     onSuccess: () => {
-      utils.comments.list.invalidate({ postId });
-      utils.posts.list.invalidate();
-      setCommentText('');
       addToast('Comentario publicado!', 'success');
+    },
+    onError: (err) => {
+      // Remove the optimistically added comment
+      setLocalComments((prev) => prev.slice(0, -1));
+      addToast(`Error al comentar: ${err.message}`, 'error');
     },
   });
 
   const handleSubmit = () => {
-    if (!commentText.trim()) return;
-    createComment.mutate({ postId, content: commentText });
+    const text = commentText.trim();
+    if (!text) return;
+
+    // Optimistic: add comment locally right away
+    const optimistic: CommentRow = {
+      id: Date.now(),
+      content: text,
+      createdAt: new Date(),
+      authorId: 0,
+      authorName: 'Tú',
+      authorAvatar: null,
+    };
+    setLocalComments((prev) => [optimistic, ...prev]);
+    setCommentText('');
+
+    createComment.mutate({ postId, content: text });
   };
+
+  // Merge: prefer local (includes optimistic), fall back to server
+  const displayComments = serverLoaded ? localComments : (serverComments ?? []);
 
   if (!isOpen) return null;
 
   return (
     <div className="mt-4 pt-4 border-t border-[#2A3347]">
-      {commentList?.length === 0 && (
+      {displayComments.length === 0 && (
         <p className="text-[#5A6680] text-sm text-center py-4">Sin comentarios. Se el primero!</p>
       )}
-      {commentList?.map((c) => (
+      {displayComments.map((c) => (
         <div key={c.id} className="flex items-start gap-2 mb-3">
           {c.authorAvatar ? (
             <img src={c.authorAvatar} alt="" className="w-8 h-8 rounded-full object-cover shrink-0" />
