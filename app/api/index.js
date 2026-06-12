@@ -50292,17 +50292,28 @@ async function upsertUser(data) {
   }
   await getDb().insert(users).values(values).onDuplicateKeyUpdate({ set: updateSet });
 }
-var mockNextUserId, mockUserById, mockUserByUnionId, isMock3;
+var mockUserById, mockUserByUnionId, mockNextUserId, isMock3;
 var init_users = __esm({
   "server/queries/users.ts"() {
     init_drizzle_orm();
     init_schema2();
     init_connection();
     init_env();
-    mockNextUserId = 1;
     mockUserById = /* @__PURE__ */ new Map();
     mockUserByUnionId = /* @__PURE__ */ new Map();
+    mockNextUserId = 5;
     isMock3 = !env.databaseUrl;
+    if (isMock3) {
+      const seed = (u) => {
+        mockUserById.set(u.id, u);
+        mockUserByUnionId.set(u.unionId, u);
+      };
+      const ts = /* @__PURE__ */ new Date(0);
+      seed({ id: 1, unionId: "dev-user-local", name: "Dev User", email: null, avatar: null, bio: null, role: "user", createdAt: ts, updatedAt: ts, lastSignInAt: ts });
+      seed({ id: 2, unionId: "mock-alejandro", name: "Alejandro Marin", email: null, avatar: null, bio: null, role: "user", createdAt: ts, updatedAt: ts, lastSignInAt: ts });
+      seed({ id: 3, unionId: "mock-sofia", name: "Sofia Jimenez", email: null, avatar: null, bio: null, role: "user", createdAt: ts, updatedAt: ts, lastSignInAt: ts });
+      seed({ id: 4, unionId: "mock-carlos", name: "Carlos Rivera", email: null, avatar: null, bio: null, role: "user", createdAt: ts, updatedAt: ts, lastSignInAt: ts });
+    }
   }
 });
 
