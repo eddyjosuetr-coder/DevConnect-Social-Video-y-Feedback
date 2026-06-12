@@ -28,6 +28,9 @@ export default function CreatePostForm({ user, onClose, addToast }: CreatePostFo
       addToast('Post publicado!', 'success');
       onClose();
     },
+    onError: (err) => {
+      addToast(`Error al publicar: ${err.message}`, 'error');
+    },
   });
 
   const handleSubmit = () => {
