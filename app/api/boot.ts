@@ -1,56 +1,11 @@
-import { Hono } from "hono";
-import { bodyLimit } from "hono/body-limit";
-import { setCookie } from "hono/cookie";
-import type { HttpBindings } from "@hono/node-server";
-import { fetchRequestHandler } from "@trpc/server/adapters/fetch";
-import { appRouter } from "./router";
-import { createContext } from "./context";
+import app from "./app";
 import { env } from "./lib/env";
-import { createOAuthCallbackHandler } from "./kimi/auth";
-import { signSessionToken } from "./kimi/session";
-import { upsertUser } from "./queries/users";
-import { getSessionCookieOptions } from "./lib/cookies";
-import { Paths, Session } from "@contracts/constants";
-
-const app = new Hono<{ Bindings: HttpBindings }>();
-
-app.use(bodyLimit({ maxSize: 50 * 1024 * 1024 }));
-app.get(Paths.oauthCallback, createOAuthCallbackHandler());
-
-if (!env.isProduction) {
-  app.get("/api/dev-login", async (c) => {
-    const DEV_UNION_ID = "dev-user-local";
-    await upsertUser({
-      unionId: DEV_UNION_ID,
-      name: "Dev User",
-      avatar: null,
-      lastSignInAt: new Date(),
-    });
-    const token = await signSessionToken({
-      unionId: DEV_UNION_ID,
-      clientId: "dev-client",
-    });
-    const cookieOpts = getSessionCookieOptions(c.req.raw.headers);
-    setCookie(c, Session.cookieName, token, {
-      ...cookieOpts,
-      maxAge: Session.maxAgeMs / 1000,
-    });
-    return c.redirect("/#/app", 302);
-  });
-}
-app.use("/api/trpc/*", async (c) => {
-  return fetchRequestHandler({
-    endpoint: "/api/trpc",
-    req: c.req.raw,
-    router: appRouter,
-    createContext,
-  });
-});
-app.all("/api/*", (c) => c.json({ error: "Not Found" }, 404));
 
 export default app;
 
-if (env.isProduction) {
+// Start the Node.js HTTP server only when running directly (Docker / local prod).
+// Vercel and other serverless runtimes import this module and use app.fetch directly.
+if (env.isProduction && !process.env.VERCEL) {
   const { serve } = await import("@hono/node-server");
   const { serveStaticFiles } = await import("./lib/vite");
   serveStaticFiles(app);
