@@ -1,0 +1,60 @@
+import {
+  mysqlTable,
+  mysqlEnum,
+  serial,
+  varchar,
+  text,
+  timestamp,
+  bigint,
+  int,
+  uniqueIndex,
+} from "drizzle-orm/mysql-core";
+
+export const users = mysqlTable("users", {
+  id: serial("id").primaryKey(),
+  unionId: varchar("unionId", { length: 255 }).notNull().unique(),
+  name: varchar("name", { length: 255 }),
+  email: varchar("email", { length: 320 }),
+  avatar: text("avatar"),
+  bio: text("bio"),
+  role: mysqlEnum("role", ["user", "admin"]).default("user").notNull(),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+  updatedAt: timestamp("updatedAt").defaultNow().notNull().$onUpdate(() => new Date()),
+  lastSignInAt: timestamp("lastSignInAt").defaultNow().notNull(),
+});
+
+export type User = typeof users.$inferSelect;
+export type InsertUser = typeof users.$inferInsert;
+
+// ── Posts ──
+export const posts = mysqlTable("posts", {
+  id: serial("id").primaryKey(),
+  userId: bigint("userId", { mode: "number", unsigned: true }).notNull(),
+  content: text("content").notNull(),
+  code: text("code"),
+  codeLanguage: varchar("codeLanguage", { length: 50 }),
+  tags: varchar("tags", { length: 500 }),
+  likesCount: int("likesCount").default(0).notNull(),
+  commentsCount: int("commentsCount").default(0).notNull(),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+  updatedAt: timestamp("updatedAt").defaultNow().notNull().$onUpdate(() => new Date()),
+});
+
+// ── Post Likes ──
+export const postLikes = mysqlTable("post_likes", {
+  id: serial("id").primaryKey(),
+  postId: bigint("postId", { mode: "number", unsigned: true }).notNull(),
+  userId: bigint("userId", { mode: "number", unsigned: true }).notNull(),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+}, (table) => ({
+  userPostUnique: uniqueIndex('post_likes_user_post_idx').on(table.postId, table.userId),
+}));
+
+// ── Comments ──
+export const comments = mysqlTable("comments", {
+  id: serial("id").primaryKey(),
+  postId: bigint("postId", { mode: "number", unsigned: true }).notNull(),
+  userId: bigint("userId", { mode: "number", unsigned: true }).notNull(),
+  content: text("content").notNull(),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+});
