@@ -3,6 +3,8 @@ import { useNavigate } from 'react-router';
 import { ArrowLeft, Code2, Terminal, Zap, Globe, Users, ChevronRight } from 'lucide-react';
 import gsap from 'gsap';
 
+const HAS_OAUTH = !!import.meta.env.VITE_KIMI_AUTH_URL;
+
 function getOAuthUrl() {
   const kimiAuthUrl = import.meta.env.VITE_KIMI_AUTH_URL;
   const appID = import.meta.env.VITE_APP_ID;
@@ -124,14 +126,16 @@ export default function Login() {
             <h2 className="text-3xl font-medium text-[#f3f2f2] mt-8 mb-2" style={{ letterSpacing: '-1px' }}>Bienvenido de vuelta</h2>
             <p className="text-[#5A6680] mb-8">Inicia sesion para acceder a tu feed y conectar con otros devs.</p>
 
-            {/* OAuth Button */}
-            <button
-              onClick={() => { window.location.href = getOAuthUrl(); }}
-              className="w-full bg-[#e1ff00] text-[#050507] font-bold py-4 px-6 flex items-center justify-center gap-3 hover:bg-[#f3f2f2] transition-all group text-sm tracking-wide"
-            >
-              <span>Continuar con DevConnect</span>
-              <ChevronRight size={18} className="group-hover:translate-x-1 transition-transform" />
-            </button>
+            {/* OAuth Button — only shown when OAuth is configured */}
+            {HAS_OAUTH && (
+              <button
+                onClick={() => { window.location.href = getOAuthUrl(); }}
+                className="w-full bg-[#e1ff00] text-[#050507] font-bold py-4 px-6 flex items-center justify-center gap-3 hover:bg-[#f3f2f2] transition-all group text-sm tracking-wide"
+              >
+                <span>Continuar con DevConnect</span>
+                <ChevronRight size={18} className="group-hover:translate-x-1 transition-transform" />
+              </button>
+            )}
 
             {/* Divider */}
             <div className="flex items-center gap-4 my-8">
@@ -149,7 +153,10 @@ export default function Login() {
               ].map((demo) => (
                 <button
                   key={demo.name}
-                  onClick={() => { window.location.href = getOAuthUrl(); }}
+                  onClick={() => {
+                    if (HAS_OAUTH) window.location.href = getOAuthUrl();
+                    else window.location.href = '/api/dev-login';
+                  }}
                   className="w-full flex items-center gap-3 p-3 bg-[#151A27] border border-[#2A3347] hover:border-[#e1ff00]/40 transition-all group text-left"
                 >
                   <img src={demo.avatar} alt={demo.name} className="w-10 h-10 rounded-full object-cover" />
@@ -162,14 +169,14 @@ export default function Login() {
               ))}
             </div>
 
-            {/* Dev login bypass — only visible in Vite dev mode */}
-            {import.meta.env.DEV && (
+            {/* Demo login — visible when OAuth is not configured */}
+            {!HAS_OAUTH && (
               <a
                 href="/api/dev-login"
                 className="mt-6 w-full flex items-center justify-center gap-2 py-3 px-4 border border-dashed border-[#e1ff00]/40 text-[#e1ff00] font-mono text-xs hover:bg-[#e1ff00]/5 transition-colors"
               >
                 <Terminal size={13} />
-                DEV LOGIN — omitir OAuth
+                DEMO LOGIN — entrar como usuario de prueba
               </a>
             )}
 

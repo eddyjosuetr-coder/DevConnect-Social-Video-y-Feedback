@@ -17,7 +17,7 @@ const app = new Hono<{ Bindings: HttpBindings }>();
 app.use(bodyLimit({ maxSize: 50 * 1024 * 1024 }));
 app.get(Paths.oauthCallback, createOAuthCallbackHandler());
 
-if (!env.isProduction) {
+if (!env.isProduction || !env.kimiAuthUrl) {
   app.get("/api/dev-login", async (c) => {
     const DEV_UNION_ID = "dev-user-local";
     await upsertUser({
