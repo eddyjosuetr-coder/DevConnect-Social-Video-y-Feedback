@@ -1,4 +1,4 @@
-import { getDb } from "../api/queries/connection";
+import { getDb } from "../server/queries/connection";
 import { posts, comments, postLikes } from "./schema.js";
 
 const SEED_POSTS = [
