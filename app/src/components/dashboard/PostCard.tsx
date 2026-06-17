@@ -19,26 +19,24 @@ export default function PostCard({ post, addToast }: PostCardProps) {
   const [repostCount, setRepostCount] = useState(0);
   const [isReposted, setIsReposted] = useState(false);
 
-  const toggleLike = trpc.posts.toggleLike.useMutation({
-    onSuccess: (data) => {
-      addToast(data.liked ? 'Te gusto el post!' : 'Quitaste tu like', 'success');
-    },
-    onError: (err) => {
-      // Revert optimistic update
-      setIsLiked((prev) => !prev);
-      setLikesCount((prev) => isLiked ? prev + 1 : Math.max(0, prev - 1));
-      addToast(`Error: ${err.message}`, 'error');
-    },
-  });
+  const toggleLike = trpc.posts.toggleLike.useMutation();
 
   const handle = post.authorName?.toLowerCase().replace(/\s/g, '') ?? 'dev';
 
   function handleLike() {
-    // Apply optimistic update immediately
     const nowLiked = !isLiked;
     setIsLiked(nowLiked);
     setLikesCount((prev) => nowLiked ? prev + 1 : Math.max(0, prev - 1));
-    toggleLike.mutate({ postId: post.id });
+    toggleLike.mutate({ postId: post.id }, {
+      onSuccess: () => {
+        addToast(nowLiked ? 'Te gusto el post!' : 'Quitaste tu like', 'success');
+      },
+      onError: (err) => {
+        setIsLiked(!nowLiked);
+        setLikesCount((prev) => nowLiked ? Math.max(0, prev - 1) : prev + 1);
+        addToast(`Error: ${err.message}`, 'error');
+      },
+    });
   }
 
   function handleRepost() {

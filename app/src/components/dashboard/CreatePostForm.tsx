@@ -22,20 +22,35 @@ export default function CreatePostForm({ user, onClose, addToast }: CreatePostFo
   const [showCode, setShowCode] = useState(false);
   const utils = trpc.useUtils();
 
-  const createPost = trpc.posts.create.useMutation({
-    onSuccess: () => {
-      utils.posts.list.invalidate();
-      addToast('Post publicado!', 'success');
-      onClose();
-    },
-    onError: (err) => {
-      addToast(`Error al publicar: ${err.message}`, 'error');
-    },
-  });
+  const createPost = trpc.posts.create.useMutation();
 
   const handleSubmit = () => {
     if (!content.trim()) return;
-    createPost.mutate({ content, code: code || undefined, codeLanguage: lang });
+    createPost.mutate({ content, code: code || undefined, codeLanguage: lang }, {
+      onSuccess: (data) => {
+        utils.posts.list.setData(undefined, (old) => {
+          const newPost = {
+            id: data.id,
+            content,
+            code: code || null,
+            codeLanguage: lang,
+            tags: null,
+            likesCount: 0,
+            commentsCount: 0,
+            createdAt: new Date(),
+            authorId: user.id,
+            authorName: user.name,
+            authorAvatar: user.avatar,
+          };
+          return old ? [newPost, ...old] : [newPost];
+        });
+        addToast('Post publicado!', 'success');
+        onClose();
+      },
+      onError: (err) => {
+        addToast(`Error al publicar: ${err.message}`, 'error');
+      },
+    });
   };
 
   return (

@@ -88,40 +88,8 @@ var init_compose = __esm({
 });
 
 // node_modules/hono/dist/http-exception.js
-var HTTPException;
 var init_http_exception = __esm({
   "node_modules/hono/dist/http-exception.js"() {
-    HTTPException = class extends Error {
-      res;
-      status;
-      /**
-       * Creates an instance of `HTTPException`.
-       * @param status - HTTP status code for the exception. Defaults to 500.
-       * @param options - Additional options for the exception.
-       */
-      constructor(status = 500, options) {
-        super(options?.message, { cause: options?.cause });
-        this.res = options?.res;
-        this.status = status;
-      }
-      /**
-       * Returns the response object associated with the exception.
-       * If a response object is not provided, a new response is created with the error message and status code.
-       * @returns The response object.
-       */
-      getResponse() {
-        if (this.res) {
-          const newResponse = new Response(this.res.body, {
-            status: this.status,
-            headers: this.res.headers
-          });
-          return newResponse;
-        }
-        return new Response(this.message, {
-          status: this.status
-        });
-      }
-    };
   }
 });
 
@@ -255,15 +223,15 @@ var init_url = __esm({
       }
       const match2 = label.match(/^\:([^\{\}]+)(?:\{(.+)\})?$/);
       if (match2) {
-        const cacheKey2 = `${label}#${next}`;
-        if (!patternCache[cacheKey2]) {
+        const cacheKey = `${label}#${next}`;
+        if (!patternCache[cacheKey]) {
           if (match2[2]) {
-            patternCache[cacheKey2] = next && next[0] !== ":" && next[0] !== "*" ? [cacheKey2, match2[1], new RegExp(`^${match2[2]}(?=/${next})`)] : [label, match2[1], new RegExp(`^${match2[2]}$`)];
+            patternCache[cacheKey] = next && next[0] !== ":" && next[0] !== "*" ? [cacheKey, match2[1], new RegExp(`^${match2[2]}(?=/${next})`)] : [label, match2[1], new RegExp(`^${match2[2]}$`)];
           } else {
-            patternCache[cacheKey2] = [label, match2[1], true];
+            patternCache[cacheKey] = [label, match2[1], true];
           }
         }
-        return patternCache[cacheKey2];
+        return patternCache[cacheKey];
       }
       return null;
     };
@@ -2285,62 +2253,6 @@ var init_dist = __esm({
   }
 });
 
-// node_modules/hono/dist/middleware/body-limit/index.js
-var ERROR_MESSAGE, bodyLimit;
-var init_body_limit = __esm({
-  "node_modules/hono/dist/middleware/body-limit/index.js"() {
-    init_http_exception();
-    ERROR_MESSAGE = "Payload Too Large";
-    bodyLimit = (options) => {
-      const onError = options.onError || (() => {
-        const res = new Response(ERROR_MESSAGE, {
-          status: 413
-        });
-        throw new HTTPException(413, { res });
-      });
-      const maxSize = options.maxSize;
-      return async function bodyLimit2(c, next) {
-        if (!c.req.raw.body) {
-          return next();
-        }
-        const hasTransferEncoding = c.req.raw.headers.has("transfer-encoding");
-        const hasContentLength = c.req.raw.headers.has("content-length");
-        if (hasContentLength && !hasTransferEncoding) {
-          const contentLength = parseInt(c.req.raw.headers.get("content-length") || "0", 10);
-          return contentLength > maxSize ? onError(c) : next();
-        }
-        let size = 0;
-        const chunks = [];
-        const rawReader = c.req.raw.body.getReader();
-        for (; ; ) {
-          const { done, value } = await rawReader.read();
-          if (done) {
-            break;
-          }
-          size += value.length;
-          if (size > maxSize) {
-            return onError(c);
-          }
-          chunks.push(value);
-        }
-        const requestInit = {
-          body: new ReadableStream({
-            start(controller) {
-              for (const chunk of chunks) {
-                controller.enqueue(chunk);
-              }
-              controller.close();
-            }
-          }),
-          duplex: "half"
-        };
-        c.req.raw = new Request(c.req.raw, requestInit);
-        return next();
-      };
-    };
-  }
-});
-
 // node_modules/hono/dist/utils/cookie.js
 var validCookieNameRegEx, _serialize, serialize;
 var init_cookie = __esm({
@@ -2547,8 +2459,8 @@ var init_codes_DagpWZLc = __esm({
 // node_modules/@trpc/server/dist/getErrorShape-BPSzUA7W.mjs
 function createInnerProxy(callback, path, memo2) {
   var _memo$cacheKey;
-  const cacheKey2 = path.join(".");
-  (_memo$cacheKey = memo2[cacheKey2]) !== null && _memo$cacheKey !== void 0 || (memo2[cacheKey2] = new Proxy(noop, {
+  const cacheKey = path.join(".");
+  (_memo$cacheKey = memo2[cacheKey]) !== null && _memo$cacheKey !== void 0 || (memo2[cacheKey] = new Proxy(noop, {
     get(_obj, key) {
       if (typeof key !== "string" || key === "then") return void 0;
       return createInnerProxy(callback, [...path, key], memo2);
@@ -2576,7 +2488,7 @@ function createInnerProxy(callback, path, memo2) {
       return callback(opts);
     }
   }));
-  return memo2[cacheKey2];
+  return memo2[cacheKey];
 }
 function getStatusCodeFromKey(code) {
   var _JSONRPC2_TO_HTTP_COD;
@@ -3464,7 +3376,7 @@ function _withPing() {
   });
   return _withPing.apply(this, arguments);
 }
-function isPromise2(value) {
+function isPromise(value) {
   return (isObject(value) || isFunction(value)) && typeof (value === null || value === void 0 ? void 0 : value["then"]) === "function" && typeof (value === null || value === void 0 ? void 0 : value["catch"]) === "function";
 }
 function createBatchStreamProducer(_x3) {
@@ -3580,7 +3492,7 @@ function _createBatchStreamProducer() {
       return null;
     }
     function encodeAsync3(value, path) {
-      if (isPromise2(value)) return [CHUNK_VALUE_TYPE_PROMISE, encodePromise(value, path)];
+      if (isPromise(value)) return [CHUNK_VALUE_TYPE_PROMISE, encodePromise(value, path)];
       if (isAsyncIterable(value)) {
         if (opts.maxDepth && path.length >= opts.maxDepth) throw new Error("Max depth reached");
         return [CHUNK_VALUE_TYPE_ASYNC_ITERABLE, encodeAsyncIterable(value, path)];
@@ -3813,7 +3725,7 @@ function caughtErrorToData(cause, errorOpts) {
 function isDataStream(v) {
   if (!isObject(v)) return false;
   if (isAsyncIterable(v)) return true;
-  return Object.values(v).some(isPromise2) || Object.values(v).some(isAsyncIterable);
+  return Object.values(v).some(isPromise) || Object.values(v).some(isAsyncIterable);
 }
 async function resolveResponse(opts) {
   var _ref, _opts$allowBatching, _opts$batching, _opts$allowMethodOver, _config$sse$enabled, _config$sse;
@@ -14328,7 +14240,7 @@ var require_errors = __commonJS({
 // node_modules/long/umd/index.js
 var require_umd = __commonJS({
   "node_modules/long/umd/index.js"(exports, module) {
-    (function(global2, factory) {
+    (function(global, factory) {
       function preferDefault(exports2) {
         return exports2.default || exports2;
       }
@@ -14345,7 +14257,7 @@ var require_umd = __commonJS({
         (function() {
           var exports2 = {};
           factory(exports2);
-          global2.Long = preferDefault(exports2);
+          global.Long = preferDefault(exports2);
         })();
       }
     })(
@@ -20517,9 +20429,9 @@ var require_binlog_dump = __commonJS({
 var require_auth_41 = __commonJS({
   "node_modules/mysql2/lib/auth_41.js"(exports) {
     "use strict";
-    var crypto3 = __require("crypto");
+    var crypto2 = __require("crypto");
     function sha1(msg, msg1, msg2) {
-      const hash2 = crypto3.createHash("sha1");
+      const hash2 = crypto2.createHash("sha1");
       hash2.update(msg);
       if (msg1) {
         hash2.update(msg1);
@@ -22395,7 +22307,7 @@ var require_sha256_password = __commonJS({
   "node_modules/mysql2/lib/auth_plugins/sha256_password.js"(exports, module) {
     "use strict";
     var PLUGIN_NAME = "sha256_password";
-    var crypto3 = __require("crypto");
+    var crypto2 = __require("crypto");
     var { xorRotating } = require_auth_41();
     var Tls = __require("tls");
     var REQUEST_SERVER_KEY_PACKET = Buffer.from([1]);
@@ -22404,7 +22316,7 @@ var require_sha256_password = __commonJS({
     var STATE_FINAL = -1;
     function encrypt(password, scramble, key) {
       const stage1 = xorRotating(Buffer.from(`${password}\0`, "utf8"), scramble);
-      return crypto3.publicEncrypt(
+      return crypto2.publicEncrypt(
         {
           key,
           oaepHash: "sha1"
@@ -22456,7 +22368,7 @@ var require_caching_sha2_password = __commonJS({
   "node_modules/mysql2/lib/auth_plugins/caching_sha2_password.js"(exports, module) {
     "use strict";
     var PLUGIN_NAME = "caching_sha2_password";
-    var crypto3 = __require("crypto");
+    var crypto2 = __require("crypto");
     var { xor: xor2, xorRotating } = require_auth_41();
     var REQUEST_SERVER_KEY_PACKET = Buffer.from([2]);
     var FAST_AUTH_SUCCESS_PACKET = Buffer.from([3]);
@@ -22466,7 +22378,7 @@ var require_caching_sha2_password = __commonJS({
     var STATE_WAIT_SERVER_KEY = 2;
     var STATE_FINAL = -1;
     function sha256(msg) {
-      const hash2 = crypto3.createHash("sha256");
+      const hash2 = crypto2.createHash("sha256");
       hash2.update(msg);
       return hash2.digest();
     }
@@ -22481,11 +22393,11 @@ var require_caching_sha2_password = __commonJS({
     }
     function encrypt(password, scramble, key) {
       const stage1 = xorRotating(Buffer.from(`${password}\0`, "utf8"), scramble);
-      return crypto3.publicEncrypt(
+      return crypto2.publicEncrypt(
         {
           key,
           oaepHash: "sha1",
-          padding: crypto3.constants.RSA_PKCS1_OAEP_PADDING
+          padding: crypto2.constants.RSA_PKCS1_OAEP_PADDING
         },
         stage1
       );
@@ -23813,7 +23725,7 @@ var require_query2 = __commonJS({
     "use strict";
     var process3 = __require("process");
     var Timers = __require("timers");
-    var Readable2 = __require("stream").Readable;
+    var Readable = __require("stream").Readable;
     var Command = require_command();
     var Packets = require_packets();
     var getTextParser = require_text_parser();
@@ -24055,7 +23967,7 @@ var require_query2 = __commonJS({
       stream(options) {
         options = options || /* @__PURE__ */ Object.create(null);
         options.objectMode = true;
-        const stream = new Readable2({
+        const stream = new Readable({
           ...options,
           emitClose: true,
           autoDestroy: true,
@@ -25391,7 +25303,7 @@ var require_connection = __commonJS({
     var Tls = __require("tls");
     var Timers = __require("timers");
     var EventEmitter = __require("events").EventEmitter;
-    var Readable2 = __require("stream").Readable;
+    var Readable = __require("stream").Readable;
     var Queue = require_denque();
     var SqlString = require_lib();
     var { createLRU } = require_lib3();
@@ -26174,7 +26086,7 @@ var require_connection = __commonJS({
       }
       createBinlogStream(opts) {
         let test = 1;
-        const stream = new Readable2({ objectMode: true });
+        const stream = new Readable({ objectMode: true });
         stream._read = function() {
           return {
             data: test++
@@ -32937,7 +32849,7 @@ var require_main = __commonJS({
     var fs = __require("fs");
     var path = __require("path");
     var os = __require("os");
-    var crypto3 = __require("crypto");
+    var crypto2 = __require("crypto");
     var TIPS = [
       "\u25C8 encrypted .env [www.dotenvx.com]",
       "\u25C8 secrets for agents [www.dotenvx.com]",
@@ -33181,7 +33093,7 @@ var require_main = __commonJS({
       const authTag = ciphertext.subarray(-16);
       ciphertext = ciphertext.subarray(12, -16);
       try {
-        const aesgcm = crypto3.createDecipheriv("aes-256-gcm", key, nonce);
+        const aesgcm = crypto2.createDecipheriv("aes-256-gcm", key, nonce);
         aesgcm.setAuthTag(authTag);
         return `${aesgcm.update(ciphertext)}${aesgcm.final()}`;
       } catch (error48) {
@@ -50459,7 +50371,6 @@ var app, app_default;
 var init_app = __esm({
   "server/app.ts"() {
     init_dist();
-    init_body_limit();
     init_cookie2();
     init_fetch();
     init_router5();
@@ -50471,7 +50382,6 @@ var init_app = __esm({
     init_cookies();
     init_constants3();
     app = new Hono2();
-    app.use(bodyLimit({ maxSize: 50 * 1024 * 1024 }));
     app.get(Paths.oauthCallback, createOAuthCallbackHandler());
     if (!env.isProduction || !env.kimiAuthUrl) {
       app.get("/api/dev-login", async (c) => {
@@ -50507,646 +50417,87 @@ var init_app = __esm({
   }
 });
 
-// node_modules/@hono/node-server/dist/index.mjs
-import { Http2ServerRequest as Http2ServerRequest2, constants as h2constants } from "http2";
-import { Http2ServerRequest } from "http2";
-import { Readable } from "stream";
-import crypto2 from "crypto";
-var RequestError = class extends Error {
-  constructor(message2, options) {
-    super(message2, options);
-    this.name = "RequestError";
-  }
-};
-var toRequestError = (e) => {
-  if (e instanceof RequestError) {
-    return e;
-  }
-  return new RequestError(e.message, { cause: e });
-};
-var GlobalRequest = global.Request;
-var Request2 = class extends GlobalRequest {
-  constructor(input, options) {
-    if (typeof input === "object" && getRequestCache in input) {
-      input = input[getRequestCache]();
-    }
-    if (typeof options?.body?.getReader !== "undefined") {
-      ;
-      options.duplex ??= "half";
-    }
-    super(input, options);
-  }
-};
-var newHeadersFromIncoming = (incoming) => {
-  const headerRecord = [];
-  const rawHeaders = incoming.rawHeaders;
-  for (let i = 0; i < rawHeaders.length; i += 2) {
-    const { [i]: key, [i + 1]: value } = rawHeaders;
-    if (key.charCodeAt(0) !== /*:*/
-    58) {
-      headerRecord.push([key, value]);
-    }
-  }
-  return new Headers(headerRecord);
-};
-var wrapBodyStream = /* @__PURE__ */ Symbol("wrapBodyStream");
-var newRequestFromIncoming = (method, url2, headers, incoming, abortController) => {
-  const init = {
-    method,
-    headers,
-    signal: abortController.signal
-  };
-  if (method === "TRACE") {
-    init.method = "GET";
-    const req = new Request2(url2, init);
-    Object.defineProperty(req, "method", {
-      get() {
-        return "TRACE";
-      }
-    });
-    return req;
-  }
-  if (!(method === "GET" || method === "HEAD")) {
-    if ("rawBody" in incoming && incoming.rawBody instanceof Buffer) {
-      init.body = new ReadableStream({
-        start(controller) {
-          controller.enqueue(incoming.rawBody);
-          controller.close();
-        }
-      });
-    } else if (incoming[wrapBodyStream]) {
-      let reader;
-      init.body = new ReadableStream({
-        async pull(controller) {
-          try {
-            reader ||= Readable.toWeb(incoming).getReader();
-            const { done, value } = await reader.read();
-            if (done) {
-              controller.close();
-            } else {
-              controller.enqueue(value);
-            }
-          } catch (error48) {
-            controller.error(error48);
-          }
-        }
-      });
-    } else {
-      init.body = Readable.toWeb(incoming);
-    }
-  }
-  return new Request2(url2, init);
-};
-var getRequestCache = /* @__PURE__ */ Symbol("getRequestCache");
-var requestCache = /* @__PURE__ */ Symbol("requestCache");
-var incomingKey = /* @__PURE__ */ Symbol("incomingKey");
-var urlKey = /* @__PURE__ */ Symbol("urlKey");
-var headersKey = /* @__PURE__ */ Symbol("headersKey");
-var abortControllerKey = /* @__PURE__ */ Symbol("abortControllerKey");
-var getAbortController = /* @__PURE__ */ Symbol("getAbortController");
-var requestPrototype = {
-  get method() {
-    return this[incomingKey].method || "GET";
-  },
-  get url() {
-    return this[urlKey];
-  },
-  get headers() {
-    return this[headersKey] ||= newHeadersFromIncoming(this[incomingKey]);
-  },
-  [getAbortController]() {
-    this[getRequestCache]();
-    return this[abortControllerKey];
-  },
-  [getRequestCache]() {
-    this[abortControllerKey] ||= new AbortController();
-    return this[requestCache] ||= newRequestFromIncoming(
-      this.method,
-      this[urlKey],
-      this.headers,
-      this[incomingKey],
-      this[abortControllerKey]
-    );
-  }
-};
-[
-  "body",
-  "bodyUsed",
-  "cache",
-  "credentials",
-  "destination",
-  "integrity",
-  "mode",
-  "redirect",
-  "referrer",
-  "referrerPolicy",
-  "signal",
-  "keepalive"
-].forEach((k) => {
-  Object.defineProperty(requestPrototype, k, {
-    get() {
-      return this[getRequestCache]()[k];
-    }
-  });
-});
-["arrayBuffer", "blob", "clone", "formData", "json", "text"].forEach((k) => {
-  Object.defineProperty(requestPrototype, k, {
-    value: function() {
-      return this[getRequestCache]()[k]();
-    }
-  });
-});
-Object.defineProperty(requestPrototype, /* @__PURE__ */ Symbol.for("nodejs.util.inspect.custom"), {
-  value: function(depth, options, inspectFn) {
-    const props = {
-      method: this.method,
-      url: this.url,
-      headers: this.headers,
-      nativeRequest: this[requestCache]
-    };
-    return `Request (lightweight) ${inspectFn(props, { ...options, depth: depth == null ? null : depth - 1 })}`;
-  }
-});
-Object.setPrototypeOf(requestPrototype, Request2.prototype);
-var newRequest = (incoming, defaultHostname) => {
-  const req = Object.create(requestPrototype);
-  req[incomingKey] = incoming;
-  const incomingUrl = incoming.url || "";
-  if (incomingUrl[0] !== "/" && // short-circuit for performance. most requests are relative URL.
-  (incomingUrl.startsWith("http://") || incomingUrl.startsWith("https://"))) {
-    if (incoming instanceof Http2ServerRequest) {
-      throw new RequestError("Absolute URL for :path is not allowed in HTTP/2");
-    }
-    try {
-      const url22 = new URL(incomingUrl);
-      req[urlKey] = url22.href;
-    } catch (e) {
-      throw new RequestError("Invalid absolute URL", { cause: e });
-    }
-    return req;
-  }
-  const host = (incoming instanceof Http2ServerRequest ? incoming.authority : incoming.headers.host) || defaultHostname;
-  if (!host) {
-    throw new RequestError("Missing host header");
-  }
-  let scheme;
-  if (incoming instanceof Http2ServerRequest) {
-    scheme = incoming.scheme;
-    if (!(scheme === "http" || scheme === "https")) {
-      throw new RequestError("Unsupported scheme");
-    }
-  } else {
-    scheme = incoming.socket && incoming.socket.encrypted ? "https" : "http";
-  }
-  const url2 = new URL(`${scheme}://${host}${incomingUrl}`);
-  if (url2.hostname.length !== host.length && url2.hostname !== host.replace(/:\d+$/, "")) {
-    throw new RequestError("Invalid host header");
-  }
-  req[urlKey] = url2.href;
-  return req;
-};
-var responseCache = /* @__PURE__ */ Symbol("responseCache");
-var getResponseCache = /* @__PURE__ */ Symbol("getResponseCache");
-var cacheKey = /* @__PURE__ */ Symbol("cache");
-var GlobalResponse = global.Response;
-var Response2 = class _Response {
-  #body;
-  #init;
-  [getResponseCache]() {
-    delete this[cacheKey];
-    return this[responseCache] ||= new GlobalResponse(this.#body, this.#init);
-  }
-  constructor(body, init) {
-    let headers;
-    this.#body = body;
-    if (init instanceof _Response) {
-      const cachedGlobalResponse = init[responseCache];
-      if (cachedGlobalResponse) {
-        this.#init = cachedGlobalResponse;
-        this[getResponseCache]();
-        return;
-      } else {
-        this.#init = init.#init;
-        headers = new Headers(init.#init.headers);
-      }
-    } else {
-      this.#init = init;
-    }
-    if (typeof body === "string" || typeof body?.getReader !== "undefined" || body instanceof Blob || body instanceof Uint8Array) {
-      ;
-      this[cacheKey] = [init?.status || 200, body, headers || init?.headers];
-    }
-  }
-  get headers() {
-    const cache2 = this[cacheKey];
-    if (cache2) {
-      if (!(cache2[2] instanceof Headers)) {
-        cache2[2] = new Headers(
-          cache2[2] || { "content-type": "text/plain; charset=UTF-8" }
-        );
-      }
-      return cache2[2];
-    }
-    return this[getResponseCache]().headers;
-  }
-  get status() {
-    return this[cacheKey]?.[0] ?? this[getResponseCache]().status;
-  }
-  get ok() {
-    const status = this.status;
-    return status >= 200 && status < 300;
-  }
-};
-["body", "bodyUsed", "redirected", "statusText", "trailers", "type", "url"].forEach((k) => {
-  Object.defineProperty(Response2.prototype, k, {
-    get() {
-      return this[getResponseCache]()[k];
-    }
-  });
-});
-["arrayBuffer", "blob", "clone", "formData", "json", "text"].forEach((k) => {
-  Object.defineProperty(Response2.prototype, k, {
-    value: function() {
-      return this[getResponseCache]()[k]();
-    }
-  });
-});
-Object.defineProperty(Response2.prototype, /* @__PURE__ */ Symbol.for("nodejs.util.inspect.custom"), {
-  value: function(depth, options, inspectFn) {
-    const props = {
-      status: this.status,
-      headers: this.headers,
-      ok: this.ok,
-      nativeResponse: this[responseCache]
-    };
-    return `Response (lightweight) ${inspectFn(props, { ...options, depth: depth == null ? null : depth - 1 })}`;
-  }
-});
-Object.setPrototypeOf(Response2, GlobalResponse);
-Object.setPrototypeOf(Response2.prototype, GlobalResponse.prototype);
-async function readWithoutBlocking(readPromise) {
-  return Promise.race([readPromise, Promise.resolve().then(() => Promise.resolve(void 0))]);
-}
-function writeFromReadableStreamDefaultReader(reader, writable, currentReadPromise) {
-  const cancel = (error48) => {
-    reader.cancel(error48).catch(() => {
-    });
-  };
-  writable.on("close", cancel);
-  writable.on("error", cancel);
-  (currentReadPromise ?? reader.read()).then(flow, handleStreamError);
-  return reader.closed.finally(() => {
-    writable.off("close", cancel);
-    writable.off("error", cancel);
-  });
-  function handleStreamError(error48) {
-    if (error48) {
-      writable.destroy(error48);
-    }
-  }
-  function onDrain() {
-    reader.read().then(flow, handleStreamError);
-  }
-  function flow({ done, value }) {
-    try {
-      if (done) {
-        writable.end();
-      } else if (!writable.write(value)) {
-        writable.once("drain", onDrain);
-      } else {
-        return reader.read().then(flow, handleStreamError);
-      }
-    } catch (e) {
-      handleStreamError(e);
-    }
-  }
-}
-function writeFromReadableStream(stream, writable) {
-  if (stream.locked) {
-    throw new TypeError("ReadableStream is locked.");
-  } else if (writable.destroyed) {
-    return;
-  }
-  return writeFromReadableStreamDefaultReader(stream.getReader(), writable);
-}
-var buildOutgoingHttpHeaders = (headers) => {
-  const res = {};
-  if (!(headers instanceof Headers)) {
-    headers = new Headers(headers ?? void 0);
-  }
-  const cookies = [];
-  for (const [k, v] of headers) {
-    if (k === "set-cookie") {
-      cookies.push(v);
-    } else {
-      res[k] = v;
-    }
-  }
-  if (cookies.length > 0) {
-    res["set-cookie"] = cookies;
-  }
-  res["content-type"] ??= "text/plain; charset=UTF-8";
-  return res;
-};
-var X_ALREADY_SENT = "x-hono-already-sent";
-if (typeof global.crypto === "undefined") {
-  global.crypto = crypto2;
-}
-var outgoingEnded = /* @__PURE__ */ Symbol("outgoingEnded");
-var incomingDraining = /* @__PURE__ */ Symbol("incomingDraining");
-var DRAIN_TIMEOUT_MS = 500;
-var MAX_DRAIN_BYTES = 64 * 1024 * 1024;
-var drainIncoming = (incoming) => {
-  const incomingWithDrainState = incoming;
-  if (incoming.destroyed || incomingWithDrainState[incomingDraining]) {
-    return;
-  }
-  incomingWithDrainState[incomingDraining] = true;
-  if (incoming instanceof Http2ServerRequest2) {
-    try {
-      ;
-      incoming.stream?.close?.(h2constants.NGHTTP2_NO_ERROR);
-    } catch {
-    }
-    return;
-  }
-  let bytesRead = 0;
-  const cleanup = () => {
-    clearTimeout(timer);
-    incoming.off("data", onData);
-    incoming.off("end", cleanup);
-    incoming.off("error", cleanup);
-  };
-  const forceClose = () => {
-    cleanup();
-    const socket = incoming.socket;
-    if (socket && !socket.destroyed) {
-      socket.destroySoon();
-    }
-  };
-  const timer = setTimeout(forceClose, DRAIN_TIMEOUT_MS);
-  timer.unref?.();
-  const onData = (chunk) => {
-    bytesRead += chunk.length;
-    if (bytesRead > MAX_DRAIN_BYTES) {
-      forceClose();
-    }
-  };
-  incoming.on("data", onData);
-  incoming.on("end", cleanup);
-  incoming.on("error", cleanup);
-  incoming.resume();
-};
-var handleRequestError = () => new Response(null, {
-  status: 400
-});
-var handleFetchError = (e) => new Response(null, {
-  status: e instanceof Error && (e.name === "TimeoutError" || e.constructor.name === "TimeoutError") ? 504 : 500
-});
-var handleResponseError = (e, outgoing) => {
-  const err = e instanceof Error ? e : new Error("unknown error", { cause: e });
-  if (err.code === "ERR_STREAM_PREMATURE_CLOSE") {
-    console.info("The user aborted a request.");
-  } else {
-    console.error(e);
-    if (!outgoing.headersSent) {
-      outgoing.writeHead(500, { "Content-Type": "text/plain" });
-    }
-    outgoing.end(`Error: ${err.message}`);
-    outgoing.destroy(err);
-  }
-};
-var flushHeaders = (outgoing) => {
-  if ("flushHeaders" in outgoing && outgoing.writable) {
-    outgoing.flushHeaders();
-  }
-};
-var responseViaCache = async (res, outgoing) => {
-  let [status, body, header] = res[cacheKey];
-  let hasContentLength = false;
-  if (!header) {
-    header = { "content-type": "text/plain; charset=UTF-8" };
-  } else if (header instanceof Headers) {
-    hasContentLength = header.has("content-length");
-    header = buildOutgoingHttpHeaders(header);
-  } else if (Array.isArray(header)) {
-    const headerObj = new Headers(header);
-    hasContentLength = headerObj.has("content-length");
-    header = buildOutgoingHttpHeaders(headerObj);
-  } else {
-    for (const key in header) {
-      if (key.length === 14 && key.toLowerCase() === "content-length") {
-        hasContentLength = true;
-        break;
-      }
-    }
-  }
-  if (!hasContentLength) {
-    if (typeof body === "string") {
-      header["Content-Length"] = Buffer.byteLength(body);
-    } else if (body instanceof Uint8Array) {
-      header["Content-Length"] = body.byteLength;
-    } else if (body instanceof Blob) {
-      header["Content-Length"] = body.size;
-    }
-  }
-  outgoing.writeHead(status, header);
-  if (typeof body === "string" || body instanceof Uint8Array) {
-    outgoing.end(body);
-  } else if (body instanceof Blob) {
-    outgoing.end(new Uint8Array(await body.arrayBuffer()));
-  } else {
-    flushHeaders(outgoing);
-    await writeFromReadableStream(body, outgoing)?.catch(
-      (e) => handleResponseError(e, outgoing)
-    );
-  }
-  ;
-  outgoing[outgoingEnded]?.();
-};
-var isPromise = (res) => typeof res.then === "function";
-var responseViaResponseObject = async (res, outgoing, options = {}) => {
-  if (isPromise(res)) {
-    if (options.errorHandler) {
-      try {
-        res = await res;
-      } catch (err) {
-        const errRes = await options.errorHandler(err);
-        if (!errRes) {
-          return;
-        }
-        res = errRes;
-      }
-    } else {
-      res = await res.catch(handleFetchError);
-    }
-  }
-  if (cacheKey in res) {
-    return responseViaCache(res, outgoing);
-  }
-  const resHeaderRecord = buildOutgoingHttpHeaders(res.headers);
-  if (res.body) {
-    const reader = res.body.getReader();
-    const values = [];
-    let done = false;
-    let currentReadPromise = void 0;
-    if (resHeaderRecord["transfer-encoding"] !== "chunked") {
-      let maxReadCount = 2;
-      for (let i = 0; i < maxReadCount; i++) {
-        currentReadPromise ||= reader.read();
-        const chunk = await readWithoutBlocking(currentReadPromise).catch((e) => {
-          console.error(e);
-          done = true;
-        });
-        if (!chunk) {
-          if (i === 1) {
-            await new Promise((resolve) => setTimeout(resolve));
-            maxReadCount = 3;
-            continue;
-          }
-          break;
-        }
-        currentReadPromise = void 0;
-        if (chunk.value) {
-          values.push(chunk.value);
-        }
-        if (chunk.done) {
-          done = true;
-          break;
-        }
-      }
-      if (done && !("content-length" in resHeaderRecord)) {
-        resHeaderRecord["content-length"] = values.reduce((acc, value) => acc + value.length, 0);
-      }
-    }
-    outgoing.writeHead(res.status, resHeaderRecord);
-    values.forEach((value) => {
-      ;
-      outgoing.write(value);
-    });
-    if (done) {
-      outgoing.end();
-    } else {
-      if (values.length === 0) {
-        flushHeaders(outgoing);
-      }
-      await writeFromReadableStreamDefaultReader(reader, outgoing, currentReadPromise);
-    }
-  } else if (resHeaderRecord[X_ALREADY_SENT]) {
-  } else {
-    outgoing.writeHead(res.status, resHeaderRecord);
-    outgoing.end();
-  }
-  ;
-  outgoing[outgoingEnded]?.();
-};
-var getRequestListener = (fetchCallback, options = {}) => {
-  const autoCleanupIncoming = options.autoCleanupIncoming ?? true;
-  if (options.overrideGlobalObjects !== false && global.Request !== Request2) {
-    Object.defineProperty(global, "Request", {
-      value: Request2
-    });
-    Object.defineProperty(global, "Response", {
-      value: Response2
-    });
-  }
-  return async (incoming, outgoing) => {
-    let res, req;
-    try {
-      req = newRequest(incoming, options.hostname);
-      let incomingEnded = !autoCleanupIncoming || incoming.method === "GET" || incoming.method === "HEAD";
-      if (!incomingEnded) {
-        ;
-        incoming[wrapBodyStream] = true;
-        incoming.on("end", () => {
-          incomingEnded = true;
-        });
-        if (incoming instanceof Http2ServerRequest2) {
-          ;
-          outgoing[outgoingEnded] = () => {
-            if (!incomingEnded) {
-              setTimeout(() => {
-                if (!incomingEnded) {
-                  setTimeout(() => {
-                    drainIncoming(incoming);
-                  });
-                }
-              });
-            }
-          };
-        }
-        outgoing.on("finish", () => {
-          if (!incomingEnded) {
-            drainIncoming(incoming);
-          }
-        });
-      }
-      outgoing.on("close", () => {
-        const abortController = req[abortControllerKey];
-        if (abortController) {
-          if (incoming.errored) {
-            req[abortControllerKey].abort(incoming.errored.toString());
-          } else if (!outgoing.writableFinished) {
-            req[abortControllerKey].abort("Client connection prematurely closed.");
-          }
-        }
-        if (!incomingEnded) {
-          setTimeout(() => {
-            if (!incomingEnded) {
-              setTimeout(() => {
-                drainIncoming(incoming);
-              });
-            }
-          });
-        }
-      });
-      res = fetchCallback(req, { incoming, outgoing });
-      if (cacheKey in res) {
-        return responseViaCache(res, outgoing);
-      }
-    } catch (e) {
-      if (!res) {
-        if (options.errorHandler) {
-          res = await options.errorHandler(req ? e : toRequestError(e));
-          if (!res) {
-            return;
-          }
-        } else if (!req) {
-          res = handleRequestError();
-        } else {
-          res = handleFetchError(e);
-        }
-      } else {
-        return handleResponseError(e, outgoing);
-      }
-    }
-    try {
-      return await responseViaResponseObject(res, outgoing, options);
-    } catch (e) {
-      return handleResponseError(e, outgoing);
-    }
-  };
-};
-
 // api/_src.ts
-var appHandler = null;
+var honoApp = null;
 var appInitError = null;
 try {
   const { default: app2 } = await Promise.resolve().then(() => (init_app(), app_exports));
-  appHandler = getRequestListener(app2.fetch);
+  honoApp = app2;
 } catch (err) {
   const e = err instanceof Error ? err : new Error(String(err));
   appInitError = { message: e.message, stack: e.stack };
   console.error("[DevConnect] Startup error:", e.message, e.stack);
 }
+async function readBody(req) {
+  const method = (req.method ?? "GET").toUpperCase();
+  if (method === "GET" || method === "HEAD") return null;
+  const pre = req.body;
+  if (pre !== void 0 && pre !== null) {
+    if (Buffer.isBuffer(pre)) return pre;
+    const text2 = typeof pre === "string" ? pre : JSON.stringify(pre);
+    return Buffer.from(text2, "utf-8");
+  }
+  return new Promise((resolve, reject) => {
+    const chunks = [];
+    req.on("data", (chunk) => chunks.push(chunk));
+    req.on("end", () => resolve(Buffer.concat(chunks)));
+    req.on("error", reject);
+  });
+}
 async function handler(req, res) {
-  if (appInitError) {
+  if (appInitError || !honoApp) {
     res.statusCode = 500;
     res.setHeader("Content-Type", "application/json");
-    res.end(JSON.stringify({ error: "Startup failed", details: appInitError.message }));
+    res.end(
+      JSON.stringify({
+        error: "Startup failed",
+        details: appInitError?.message ?? "App not initialized"
+      })
+    );
     return;
   }
-  return appHandler(req, res);
+  try {
+    const method = (req.method ?? "GET").toUpperCase();
+    const host = req.headers.host ?? "localhost";
+    const proto = (req.headers["x-forwarded-proto"] ?? "").split(",")[0].trim() || "https";
+    const url2 = `${proto}://${host}${req.url ?? "/"}`;
+    const headers = new Headers();
+    const rawHeaders = req.rawHeaders;
+    for (let i = 0; i < rawHeaders.length - 1; i += 2) {
+      headers.append(rawHeaders[i], rawHeaders[i + 1]);
+    }
+    const bodyBuf = await readBody(req);
+    const hasBody = bodyBuf !== null && bodyBuf.length > 0;
+    const fetchReq = new Request(url2, {
+      method,
+      headers,
+      body: hasBody ? bodyBuf : void 0,
+      ...hasBody ? { duplex: "half" } : {}
+    });
+    const fetchRes = await honoApp.fetch(fetchReq);
+    res.statusCode = fetchRes.status;
+    const setCookies = [];
+    fetchRes.headers.forEach((value, key) => {
+      if (key.toLowerCase() === "set-cookie") {
+        setCookies.push(value);
+      } else {
+        res.setHeader(key, value);
+      }
+    });
+    if (setCookies.length > 0) {
+      res.setHeader("set-cookie", setCookies);
+    }
+    const responseBody = await fetchRes.arrayBuffer();
+    res.end(Buffer.from(responseBody));
+  } catch (err) {
+    const e = err instanceof Error ? err : new Error(String(err));
+    console.error("[DevConnect] Handler error:", e.message, e.stack);
+    if (!res.headersSent) {
+      res.statusCode = 500;
+      res.setHeader("Content-Type", "application/json");
+      res.end(JSON.stringify({ error: "Internal server error", details: e.message }));
+    }
+  }
 }
 export {
   handler as default

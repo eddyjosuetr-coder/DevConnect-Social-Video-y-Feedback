@@ -1,5 +1,4 @@
 import { Hono } from "hono";
-import { bodyLimit } from "hono/body-limit";
 import { setCookie } from "hono/cookie";
 import type { HttpBindings } from "@hono/node-server";
 import { fetchRequestHandler } from "@trpc/server/adapters/fetch";
@@ -13,8 +12,6 @@ import { getSessionCookieOptions } from "./lib/cookies";
 import { Paths, Session } from "@contracts/constants";
 
 const app = new Hono<{ Bindings: HttpBindings }>();
-
-app.use(bodyLimit({ maxSize: 50 * 1024 * 1024 }));
 app.get(Paths.oauthCallback, createOAuthCallbackHandler());
 
 if (!env.isProduction || !env.kimiAuthUrl) {
