@@ -111,7 +111,7 @@ export default function Dashboard() {
   if (!isAuthenticated || !user) return null;
 
   return (
-    <div className="min-h-screen bg-[#050507] flex">
+    <div className="min-h-screen bg-[#060911] flex">
       <DashboardSidebar
         user={user}
         activeTab={activeTab}
@@ -122,9 +122,9 @@ export default function Dashboard() {
         onCloseMobile={() => setMobileSidebar(false)}
       />
 
-      <main className="flex-1 min-w-0 border-r border-[#2A3347]">
+      <main className="flex-1 min-w-0 border-r border-[#1E2535]">
         {/* Mobile Header */}
-        <div className="lg:hidden flex items-center justify-between p-4 border-b border-[#2A3347] sticky top-0 bg-[#050507]/95 backdrop-blur-sm z-30">
+        <div className="lg:hidden flex items-center justify-between p-4 border-b border-[#1E2535] sticky top-0 bg-[#060911]/95 backdrop-blur-sm z-30">
           <button onClick={() => setMobileSidebar(true)}>
             <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="text-[#f3f2f2]">
               <line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="18" x2="21" y2="18"/>
@@ -137,8 +137,10 @@ export default function Dashboard() {
         </div>
 
         {/* Desktop Header */}
-        <div className="hidden lg:flex items-center justify-between px-4 py-3 border-b border-[#2A3347] sticky top-0 bg-[#050507]/95 backdrop-blur-sm z-30">
-          <h2 className="text-[#f3f2f2] font-bold text-xl">{TAB_LABELS[activeTab]}</h2>
+        <div className="hidden lg:flex items-center justify-between px-5 py-3.5 border-b border-[#1E2535] sticky top-0 bg-[#060911]/95 backdrop-blur-sm z-30">
+          <div className="flex items-center gap-2">
+            <h2 className="text-[#f3f2f2] font-black text-lg tracking-tight">{TAB_LABELS[activeTab]}</h2>
+          </div>
           {searchQuery && activeTab === 'feed' && (
             <span className="text-xs text-[#5A6680]">
               {filteredPosts.length} resultado{filteredPosts.length !== 1 ? 's' : ''} para &ldquo;{searchQuery}&rdquo;
