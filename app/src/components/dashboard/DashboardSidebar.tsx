@@ -83,12 +83,12 @@ export default function DashboardSidebar({
   const sidebarContent = (isMobile = false) => (
     <>
       {/* Logo */}
-      <div className="flex items-center justify-center mb-8 px-4 relative">
+      <div className="flex items-center justify-center mb-4 relative">
         <img
           src="/images/logo-solocara.png"
           alt="DevConnect"
-          className="w-24 h-24 object-contain"
-          style={{ filter: 'drop-shadow(0 0 18px rgba(225,255,0,0.8))' }}
+          className="w-36 h-36 object-contain"
+          style={{ filter: 'drop-shadow(0 0 20px rgba(225,255,0,0.85))' }}
         />
         {isMobile && (
           <button onClick={onCloseMobile} className="absolute right-4 text-[#5A6680] hover:text-[#f3f2f2]">
