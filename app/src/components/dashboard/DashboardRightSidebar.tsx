@@ -1,4 +1,4 @@
-import { Search } from 'lucide-react';
+import { Search, X } from 'lucide-react';
 import type { TrendingTopic, SuggestedUser } from './types';
 
 interface DashboardRightSidebarProps {
@@ -6,6 +6,8 @@ interface DashboardRightSidebarProps {
   suggestedUsers: SuggestedUser[];
   followedUsers: Set<string>;
   onToggleFollow: (name: string) => void;
+  searchQuery: string;
+  onSearch: (q: string) => void;
 }
 
 export default function DashboardRightSidebar({
@@ -13,6 +15,8 @@ export default function DashboardRightSidebar({
   suggestedUsers,
   followedUsers,
   onToggleFollow,
+  searchQuery,
+  onSearch,
 }: DashboardRightSidebarProps) {
   return (
     <aside className="hidden xl:block w-96 sticky top-0 h-screen p-4 overflow-y-auto">
@@ -20,9 +24,19 @@ export default function DashboardRightSidebar({
         <Search size={18} className="absolute left-4 top-1/2 -translate-y-1/2 text-[#5A6680]" />
         <input
           type="text"
-          placeholder="Buscar..."
-          className="w-full bg-[#151A27] border border-[#2A3347] text-[#f3f2f2] pl-12 pr-4 py-3 text-sm outline-none focus:border-[#3B82F6] transition-colors placeholder:text-[#5A6680] rounded-xl"
+          value={searchQuery}
+          onChange={(e) => onSearch(e.target.value)}
+          placeholder="Buscar en el feed..."
+          className="w-full bg-[#151A27] border border-[#2A3347] text-[#f3f2f2] pl-12 pr-10 py-3 text-sm outline-none focus:border-[#3B82F6] transition-colors placeholder:text-[#5A6680] rounded-xl"
         />
+        {searchQuery && (
+          <button
+            onClick={() => onSearch('')}
+            className="absolute right-3 top-1/2 -translate-y-1/2 text-[#5A6680] hover:text-[#f3f2f2] transition-colors"
+          >
+            <X size={15} />
+          </button>
+        )}
       </div>
 
       <div className="bg-[#151A27] border border-[#2A3347] rounded-xl p-4 mb-4">

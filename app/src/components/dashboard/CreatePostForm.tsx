@@ -37,6 +37,7 @@ export default function CreatePostForm({ user, onClose, addToast }: CreatePostFo
             tags: null,
             likesCount: 0,
             commentsCount: 0,
+            repostsCount: 0,
             createdAt: new Date(),
             authorId: user.id,
             authorName: user.name,

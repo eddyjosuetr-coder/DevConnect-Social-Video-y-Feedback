@@ -21,3 +21,8 @@ export const createCommentSchema = z.object({
 });
 
 export const deleteCommentSchema = z.object({ commentId: z.number().int() });
+
+export const toggleRepostSchema = z.object({ postId: z.number().int() });
+
+export const toggleFollowSchema = z.object({ followingId: z.number().int() });
+export const isFollowingSchema  = z.object({ followingId: z.number().int() });

@@ -1,4 +1,4 @@
-export type ActiveTab = 'feed' | 'explore' | 'notifications' | 'messages';
+export type ActiveTab = 'feed' | 'explore' | 'notifications' | 'messages' | 'bookmarks' | 'profile';
 
 export type Post = {
   id: number;
@@ -8,6 +8,7 @@ export type Post = {
   tags: string | null;
   likesCount: number;
   commentsCount: number;
+  repostsCount: number;
   createdAt: Date | string | null;
   authorId: number;
   authorName: string | null;

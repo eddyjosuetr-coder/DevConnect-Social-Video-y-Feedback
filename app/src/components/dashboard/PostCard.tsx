@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Heart, MessageCircle, Repeat2, Share2, Verified } from 'lucide-react';
+import { Heart, MessageCircle, Repeat2, Share2, Verified, Bookmark } from 'lucide-react';
 import { trpc } from '@/providers/trpc';
 import { formatDate } from '@/lib/utils';
 import type { Toast } from '@/hooks/useToast';
@@ -9,17 +9,20 @@ import CommentSection from './CommentSection';
 interface PostCardProps {
   post: Post;
   addToast: (message: string, type: Toast['type']) => void;
+  isSaved?: boolean;
+  onToggleSave?: () => void;
 }
 
-export default function PostCard({ post, addToast }: PostCardProps) {
+export default function PostCard({ post, addToast, isSaved = false, onToggleSave }: PostCardProps) {
   const [commentsOpen, setCommentsOpen] = useState(false);
   // Optimistic local state — don't rely on server refetch (serverless is stateless)
   const [likesCount, setLikesCount] = useState(post.likesCount);
   const [isLiked, setIsLiked] = useState(false);
-  const [repostCount, setRepostCount] = useState(0);
+  const [repostCount, setRepostCount] = useState(post.repostsCount);
   const [isReposted, setIsReposted] = useState(false);
 
   const toggleLike = trpc.posts.toggleLike.useMutation();
+  const toggleRepost = trpc.reposts.toggle.useMutation();
 
   const handle = post.authorName?.toLowerCase().replace(/\s/g, '') ?? 'dev';
 
@@ -43,7 +46,16 @@ export default function PostCard({ post, addToast }: PostCardProps) {
     const nowReposted = !isReposted;
     setIsReposted(nowReposted);
     setRepostCount((prev) => nowReposted ? prev + 1 : Math.max(0, prev - 1));
-    addToast(nowReposted ? 'Reposteado!' : 'Repost eliminado', 'success');
+    toggleRepost.mutate({ postId: post.id }, {
+      onSuccess: () => {
+        addToast(nowReposted ? 'Reposteado!' : 'Repost eliminado', 'success');
+      },
+      onError: (err) => {
+        setIsReposted(!nowReposted);
+        setRepostCount((prev) => nowReposted ? Math.max(0, prev - 1) : prev + 1);
+        addToast(`Error: ${err.message}`, 'error');
+      },
+    });
   }
 
   return (
@@ -126,6 +138,18 @@ export default function PostCard({ post, addToast }: PostCardProps) {
                 <Heart size={18} className={isLiked ? 'fill-[#EF4444]' : ''} />
               </div>
               <span className="text-sm">{likesCount}</span>
+            </button>
+
+            <button
+              onClick={() => {
+                onToggleSave?.();
+                addToast(isSaved ? 'Quitaste de guardados' : 'Post guardado!', 'success');
+              }}
+              className={`flex items-center gap-2 transition-colors group ${isSaved ? 'text-[#e1ff00]' : 'text-[#5A6680] hover:text-[#e1ff00]'}`}
+            >
+              <div className="p-2 rounded-full group-hover:bg-[#e1ff00]/10">
+                <Bookmark size={18} className={isSaved ? 'fill-[#e1ff00]' : ''} />
+              </div>
             </button>
 
             <button

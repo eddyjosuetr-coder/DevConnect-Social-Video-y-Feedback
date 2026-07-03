@@ -33232,13 +33232,13 @@ var init_env = __esm({
   "server/lib/env.ts"() {
     init_config();
     env = {
-      appId: optional("APP_ID"),
       // Falls back to a demo key if APP_SECRET is not configured; tokens won't survive restarts.
       appSecret: process.env.APP_SECRET || "devconnect-demo-insecure-fallback-key",
       isProduction: process.env.NODE_ENV === "production",
       databaseUrl: optional("DATABASE_URL"),
-      kimiAuthUrl: optional("KIMI_AUTH_URL"),
-      kimiOpenUrl: optional("KIMI_OPEN_URL"),
+      // Google OAuth — set these in Vercel environment variables
+      googleClientId: optional("GOOGLE_CLIENT_ID"),
+      googleClientSecret: optional("GOOGLE_CLIENT_SECRET"),
       ownerUnionId: optional("OWNER_UNION_ID")
     };
   }
@@ -33457,11 +33457,13 @@ var init_mysql_core = __esm({
 var schema_exports = {};
 __export(schema_exports, {
   comments: () => comments,
+  follows: () => follows,
   postLikes: () => postLikes,
   posts: () => posts,
+  reposts: () => reposts,
   users: () => users
 });
-var users, posts, postLikes, comments;
+var users, posts, postLikes, comments, reposts, follows;
 var init_schema2 = __esm({
   "db/schema.ts"() {
     init_mysql_core();
@@ -33486,6 +33488,7 @@ var init_schema2 = __esm({
       tags: varchar("tags", { length: 500 }),
       likesCount: int("likesCount").default(0).notNull(),
       commentsCount: int("commentsCount").default(0).notNull(),
+      repostsCount: int("repostsCount").default(0).notNull(),
       createdAt: timestamp("createdAt").defaultNow().notNull(),
       updatedAt: timestamp("updatedAt").defaultNow().notNull().$onUpdate(() => /* @__PURE__ */ new Date())
     });
@@ -33504,6 +33507,22 @@ var init_schema2 = __esm({
       content: text("content").notNull(),
       createdAt: timestamp("createdAt").defaultNow().notNull()
     });
+    reposts = mysqlTable("reposts", {
+      id: serial("id").primaryKey(),
+      postId: bigint("postId", { mode: "number", unsigned: true }).notNull(),
+      userId: bigint("userId", { mode: "number", unsigned: true }).notNull(),
+      createdAt: timestamp("createdAt").defaultNow().notNull()
+    }, (table) => ({
+      userPostUnique: uniqueIndex("reposts_user_post_idx").on(table.postId, table.userId)
+    }));
+    follows = mysqlTable("follows", {
+      id: serial("id").primaryKey(),
+      followerId: bigint("followerId", { mode: "number", unsigned: true }).notNull(),
+      followingId: bigint("followingId", { mode: "number", unsigned: true }).notNull(),
+      createdAt: timestamp("createdAt").defaultNow().notNull()
+    }, (table) => ({
+      uniqueFollow: uniqueIndex("follows_follower_following_idx").on(table.followerId, table.followingId)
+    }));
   }
 });
 
@@ -33549,6 +33568,7 @@ async function listPosts() {
     tags: posts.tags,
     likesCount: posts.likesCount,
     commentsCount: posts.commentsCount,
+    repostsCount: posts.repostsCount,
     createdAt: posts.createdAt,
     authorId: posts.userId,
     authorName: users.name,
@@ -33567,6 +33587,7 @@ async function createPost(data) {
       tags: data.tags,
       likesCount: 0,
       commentsCount: 0,
+      repostsCount: 0,
       createdAt: /* @__PURE__ */ new Date(),
       authorId: data.userId,
       authorName: data.authorName,
@@ -33643,6 +33664,7 @@ var init_posts = __esm({
         tags: "trpc,react,typescript",
         likesCount: 5,
         commentsCount: 1,
+        repostsCount: 3,
         createdAt: new Date(Date.now() - 2 * 36e5),
         authorId: 2,
         authorName: "Alejandro Marin",
@@ -33663,6 +33685,7 @@ async function fetchUser(id: string): Promise<Result<User>> {
         tags: "typescript,patterns",
         likesCount: 18,
         commentsCount: 2,
+        repostsCount: 7,
         createdAt: new Date(Date.now() - 5 * 36e5),
         authorId: 3,
         authorName: "Sofia Jimenez",
@@ -33682,6 +33705,7 @@ async function fetchUser(id: string): Promise<Result<User>> {
         tags: "css,webdev",
         likesCount: 9,
         commentsCount: 0,
+        repostsCount: 2,
         createdAt: new Date(Date.now() - 24 * 36e5),
         authorId: 4,
         authorName: "Carlos Rivera",
@@ -48009,7 +48033,7 @@ var init_zod = __esm({
 });
 
 // contracts/schemas.ts
-var createPostSchema, toggleLikeSchema, isLikedSchema, deletePostSchema, listCommentsSchema, createCommentSchema, deleteCommentSchema;
+var createPostSchema, toggleLikeSchema, isLikedSchema, deletePostSchema, listCommentsSchema, createCommentSchema, deleteCommentSchema, toggleRepostSchema, toggleFollowSchema, isFollowingSchema;
 var init_schemas3 = __esm({
   "contracts/schemas.ts"() {
     init_zod();
@@ -48028,6 +48052,9 @@ var init_schemas3 = __esm({
       content: external_exports.string().min(1).max(1e3)
     });
     deleteCommentSchema = external_exports.object({ commentId: external_exports.number().int() });
+    toggleRepostSchema = external_exports.object({ postId: external_exports.number().int() });
+    toggleFollowSchema = external_exports.object({ followingId: external_exports.number().int() });
+    isFollowingSchema = external_exports.object({ followingId: external_exports.number().int() });
   }
 });
 
@@ -48188,6 +48215,139 @@ var init_comments_router = __esm({
   }
 });
 
+// server/queries/reposts.ts
+async function toggleRepost(postId, userId) {
+  if (isMock3) {
+    const key = `${userId}:${postId}`;
+    const post = mockPosts.find((p) => p.id === postId);
+    if (!post) return { reposted: false };
+    if (mockReposts.has(key)) {
+      mockReposts.delete(key);
+      post.repostsCount = Math.max(0, post.repostsCount - 1);
+      return { reposted: false };
+    }
+    mockReposts.add(key);
+    post.repostsCount += 1;
+    return { reposted: true };
+  }
+  const db = getDb();
+  const existing = await db.select().from(reposts).where(and(eq(reposts.postId, postId), eq(reposts.userId, userId))).limit(1);
+  if (existing.length > 0) {
+    await db.delete(reposts).where(eq(reposts.id, existing[0].id));
+    await db.update(posts).set({ repostsCount: sql`GREATEST(0, ${posts.repostsCount} - 1)` }).where(eq(posts.id, postId));
+    return { reposted: false };
+  }
+  await db.insert(reposts).values({ postId, userId });
+  await db.update(posts).set({ repostsCount: sql`${posts.repostsCount} + 1` }).where(eq(posts.id, postId));
+  return { reposted: true };
+}
+async function isReposted(postId, userId) {
+  if (isMock3) return mockReposts.has(`${userId}:${postId}`);
+  const db = getDb();
+  const existing = await db.select().from(reposts).where(and(eq(reposts.postId, postId), eq(reposts.userId, userId))).limit(1);
+  return existing.length > 0;
+}
+var isMock3, mockReposts;
+var init_reposts = __esm({
+  "server/queries/reposts.ts"() {
+    init_drizzle_orm();
+    init_connection();
+    init_schema2();
+    init_posts();
+    isMock3 = !process.env.DATABASE_URL;
+    mockReposts = /* @__PURE__ */ new Set();
+  }
+});
+
+// server/reposts-router.ts
+var repostsRouter;
+var init_reposts_router = __esm({
+  "server/reposts-router.ts"() {
+    init_middleware();
+    init_reposts();
+    init_schemas3();
+    repostsRouter = createRouter({
+      toggle: authedQuery.input(toggleRepostSchema).mutation(
+        ({ ctx, input }) => toggleRepost(input.postId, ctx.user.id)
+      ),
+      isReposted: authedQuery.input(toggleRepostSchema).query(
+        ({ ctx, input }) => isReposted(input.postId, ctx.user.id)
+      )
+    });
+  }
+});
+
+// server/queries/follows.ts
+async function toggleFollow(followerId, followingId) {
+  if (followerId === followingId) return { following: false };
+  if (isMock4) {
+    const key = `${followerId}:${followingId}`;
+    if (mockFollows.has(key)) {
+      mockFollows.delete(key);
+      return { following: false };
+    }
+    mockFollows.add(key);
+    return { following: true };
+  }
+  const db = getDb();
+  const existing = await db.select().from(follows).where(
+    and(eq(follows.followerId, followerId), eq(follows.followingId, followingId))
+  ).limit(1);
+  if (existing.length > 0) {
+    await db.delete(follows).where(eq(follows.id, existing[0].id));
+    return { following: false };
+  }
+  await db.insert(follows).values({ followerId, followingId });
+  return { following: true };
+}
+async function isFollowing(followerId, followingId) {
+  if (isMock4) return mockFollows.has(`${followerId}:${followingId}`);
+  const db = getDb();
+  const existing = await db.select().from(follows).where(
+    and(eq(follows.followerId, followerId), eq(follows.followingId, followingId))
+  ).limit(1);
+  return existing.length > 0;
+}
+async function listFollowing(followerId) {
+  if (isMock4) {
+    return [...mockFollows].filter((k) => k.startsWith(`${followerId}:`)).map((k) => Number(k.split(":")[1]));
+  }
+  const db = getDb();
+  const rows = await db.select({ followingId: follows.followingId }).from(follows).where(eq(follows.followerId, followerId));
+  return rows.map((r) => r.followingId);
+}
+var isMock4, mockFollows;
+var init_follows = __esm({
+  "server/queries/follows.ts"() {
+    init_drizzle_orm();
+    init_connection();
+    init_schema2();
+    isMock4 = !process.env.DATABASE_URL;
+    mockFollows = /* @__PURE__ */ new Set();
+  }
+});
+
+// server/follows-router.ts
+var followsRouter;
+var init_follows_router = __esm({
+  "server/follows-router.ts"() {
+    init_middleware();
+    init_follows();
+    init_schemas3();
+    followsRouter = createRouter({
+      toggle: authedQuery.input(toggleFollowSchema).mutation(
+        ({ ctx, input }) => toggleFollow(ctx.user.id, input.followingId)
+      ),
+      isFollowing: authedQuery.input(isFollowingSchema).query(
+        ({ ctx, input }) => isFollowing(ctx.user.id, input.followingId)
+      ),
+      listFollowing: authedQuery.query(
+        ({ ctx }) => listFollowing(ctx.user.id)
+      )
+    });
+  }
+});
+
 // server/router.ts
 var appRouter;
 var init_router5 = __esm({
@@ -48195,13 +48355,34 @@ var init_router5 = __esm({
     init_auth_router();
     init_posts_router();
     init_comments_router();
+    init_reposts_router();
+    init_follows_router();
     init_middleware();
     appRouter = createRouter({
       ping: publicQuery.query(() => ({ ok: true, ts: Date.now() })),
       auth: authRouter,
       posts: postsRouter,
-      comments: commentsRouter
+      comments: commentsRouter,
+      reposts: repostsRouter,
+      follows: followsRouter
     });
+  }
+});
+
+// contracts/errors.ts
+function appError(status, message2) {
+  return { tag: "app_error", status, message: message2 };
+}
+var Errors;
+var init_errors4 = __esm({
+  "contracts/errors.ts"() {
+    Errors = {
+      badRequest: (msg) => appError(400, msg),
+      unauthorized: (msg) => appError(401, msg),
+      forbidden: (msg) => appError(403, msg),
+      notFound: (msg) => appError(404, msg),
+      internal: (msg) => appError(500, msg)
+    };
   }
 });
 
@@ -48300,8 +48481,8 @@ var init_base64url = __esm({
 });
 
 // node_modules/jose/dist/webapi/util/errors.js
-var JOSEError, JWTClaimValidationFailed, JWTExpired, JOSEAlgNotAllowed, JOSENotSupported, JWSInvalid, JWTInvalid, JWKSInvalid, JWKSNoMatchingKey, JWKSMultipleMatchingKeys, JWKSTimeout, JWSSignatureVerificationFailed;
-var init_errors4 = __esm({
+var JOSEError, JWTClaimValidationFailed, JWTExpired, JOSEAlgNotAllowed, JOSENotSupported, JWSInvalid, JWTInvalid, JWSSignatureVerificationFailed;
+var init_errors5 = __esm({
   "node_modules/jose/dist/webapi/util/errors.js"() {
     JOSEError = class extends Error {
       static code = "ERR_JOSE_GENERIC";
@@ -48353,32 +48534,6 @@ var init_errors4 = __esm({
     JWTInvalid = class extends JOSEError {
       static code = "ERR_JWT_INVALID";
       code = "ERR_JWT_INVALID";
-    };
-    JWKSInvalid = class extends JOSEError {
-      static code = "ERR_JWKS_INVALID";
-      code = "ERR_JWKS_INVALID";
-    };
-    JWKSNoMatchingKey = class extends JOSEError {
-      static code = "ERR_JWKS_NO_MATCHING_KEY";
-      code = "ERR_JWKS_NO_MATCHING_KEY";
-      constructor(message2 = "no applicable key found in the JSON Web Key Set", options) {
-        super(message2, options);
-      }
-    };
-    JWKSMultipleMatchingKeys = class extends JOSEError {
-      [Symbol.asyncIterator];
-      static code = "ERR_JWKS_MULTIPLE_MATCHING_KEYS";
-      code = "ERR_JWKS_MULTIPLE_MATCHING_KEYS";
-      constructor(message2 = "multiple matching keys found in the JSON Web Key Set", options) {
-        super(message2, options);
-      }
-    };
-    JWKSTimeout = class extends JOSEError {
-      static code = "ERR_JWKS_TIMEOUT";
-      code = "ERR_JWKS_TIMEOUT";
-      constructor(message2 = "request timed out", options) {
-        super(message2, options);
-      }
     };
     JWSSignatureVerificationFailed = class extends JOSEError {
       static code = "ERR_JWS_SIGNATURE_VERIFICATION_FAILED";
@@ -48704,51 +48859,7 @@ async function jwkToKey(jwk) {
 }
 var init_jwk_to_key = __esm({
   "node_modules/jose/dist/webapi/lib/jwk_to_key.js"() {
-    init_errors4();
-  }
-});
-
-// node_modules/jose/dist/webapi/key/import.js
-async function importJWK(jwk, alg, options) {
-  if (!isObject3(jwk)) {
-    throw new TypeError("JWK must be an object");
-  }
-  let ext;
-  alg ??= jwk.alg;
-  ext ??= options?.extractable ?? jwk.ext;
-  switch (jwk.kty) {
-    case "oct":
-      if (typeof jwk.k !== "string" || !jwk.k) {
-        throw new TypeError('missing "k" (Key Value) Parameter value');
-      }
-      return decode3(jwk.k);
-    case "RSA":
-      if ("oth" in jwk && jwk.oth !== void 0) {
-        throw new JOSENotSupported('RSA JWK "oth" (Other Primes Info) Parameter value is not supported');
-      }
-      return jwkToKey({ ...jwk, alg, ext });
-    case "AKP": {
-      if (typeof jwk.alg !== "string" || !jwk.alg) {
-        throw new TypeError('missing "alg" (Algorithm) Parameter value');
-      }
-      if (alg !== void 0 && alg !== jwk.alg) {
-        throw new TypeError("JWK alg and alg option value mismatch");
-      }
-      return jwkToKey({ ...jwk, ext });
-    }
-    case "EC":
-    case "OKP":
-      return jwkToKey({ ...jwk, alg, ext });
-    default:
-      throw new JOSENotSupported('Unsupported "kty" (Key Type) Parameter value');
-  }
-}
-var init_import = __esm({
-  "node_modules/jose/dist/webapi/key/import.js"() {
-    init_base64url();
-    init_jwk_to_key();
-    init_errors4();
-    init_is_object();
+    init_errors5();
   }
 });
 
@@ -48784,7 +48895,7 @@ function validateCrit(Err, recognizedDefault, recognizedOption, protectedHeader,
 }
 var init_validate_crit = __esm({
   "node_modules/jose/dist/webapi/lib/validate_crit.js"() {
-    init_errors4();
+    init_errors5();
   }
 });
 
@@ -49155,7 +49266,7 @@ function subtleAlgorithm(alg, algorithm) {
 }
 var init_subtle_dsa = __esm({
   "node_modules/jose/dist/webapi/lib/subtle_dsa.js"() {
-    init_errors4();
+    init_errors5();
   }
 });
 
@@ -49301,7 +49412,7 @@ var init_verify2 = __esm({
   "node_modules/jose/dist/webapi/jws/flattened/verify.js"() {
     init_base64url();
     init_verify();
-    init_errors4();
+    init_errors5();
     init_buffer_utils();
     init_is_disjoint();
     init_is_object();
@@ -49334,7 +49445,7 @@ async function compactVerify(jws, key, options) {
 var init_verify3 = __esm({
   "node_modules/jose/dist/webapi/jws/compact/verify.js"() {
     init_verify2();
-    init_errors4();
+    init_errors5();
     init_buffer_utils();
   }
 });
@@ -49482,7 +49593,7 @@ function validateClaimsSet(protectedHeader, encodedPayload, options = {}) {
 var epoch, minute, hour, day, week, year2, REGEX, normalizeTyp, checkAudiencePresence, JWTClaimsBuilder;
 var init_jwt_claims_set = __esm({
   "node_modules/jose/dist/webapi/lib/jwt_claims_set.js"() {
-    init_errors4();
+    init_errors5();
     init_buffer_utils();
     init_is_object();
     epoch = (date6) => Math.floor(date6.getTime() / 1e3);
@@ -49589,7 +49700,7 @@ var init_verify4 = __esm({
   "node_modules/jose/dist/webapi/jwt/verify.js"() {
     init_verify3();
     init_jwt_claims_set();
-    init_errors4();
+    init_errors5();
   }
 });
 
@@ -49615,7 +49726,7 @@ var init_sign2 = __esm({
     init_base64url();
     init_sign();
     init_is_disjoint();
-    init_errors4();
+    init_errors5();
     init_buffer_utils();
     init_check_key_type();
     init_validate_crit();
@@ -49735,7 +49846,7 @@ var SignJWT;
 var init_sign4 = __esm({
   "node_modules/jose/dist/webapi/jwt/sign.js"() {
     init_sign3();
-    init_errors4();
+    init_errors5();
     init_jwt_claims_set();
     SignJWT = class {
       #protectedHeader;
@@ -49787,322 +49898,11 @@ var init_sign4 = __esm({
   }
 });
 
-// node_modules/jose/dist/webapi/jwks/local.js
-function getKtyFromAlg(alg) {
-  switch (typeof alg === "string" && alg.slice(0, 2)) {
-    case "RS":
-    case "PS":
-      return "RSA";
-    case "ES":
-      return "EC";
-    case "Ed":
-      return "OKP";
-    case "ML":
-      return "AKP";
-    default:
-      throw new JOSENotSupported('Unsupported "alg" value for a JSON Web Key Set');
-  }
-}
-function isJWKSLike(jwks) {
-  return jwks && typeof jwks === "object" && Array.isArray(jwks.keys) && jwks.keys.every(isJWKLike);
-}
-function isJWKLike(key) {
-  return isObject3(key);
-}
-async function importWithAlgCache(cache2, jwk, alg) {
-  const cached2 = cache2.get(jwk) || cache2.set(jwk, {}).get(jwk);
-  if (cached2[alg] === void 0) {
-    const key = await importJWK({ ...jwk, ext: true }, alg);
-    if (key instanceof Uint8Array || key.type !== "public") {
-      throw new JWKSInvalid("JSON Web Key Set members must be public keys");
-    }
-    cached2[alg] = key;
-  }
-  return cached2[alg];
-}
-function createLocalJWKSet(jwks) {
-  const set2 = new LocalJWKSet(jwks);
-  const localJWKSet = async (protectedHeader, token) => set2.getKey(protectedHeader, token);
-  Object.defineProperties(localJWKSet, {
-    jwks: {
-      value: () => structuredClone(set2.jwks()),
-      enumerable: false,
-      configurable: false,
-      writable: false
-    }
-  });
-  return localJWKSet;
-}
-var LocalJWKSet;
-var init_local = __esm({
-  "node_modules/jose/dist/webapi/jwks/local.js"() {
-    init_import();
-    init_errors4();
-    init_is_object();
-    LocalJWKSet = class {
-      #jwks;
-      #cached = /* @__PURE__ */ new WeakMap();
-      constructor(jwks) {
-        if (!isJWKSLike(jwks)) {
-          throw new JWKSInvalid("JSON Web Key Set malformed");
-        }
-        this.#jwks = structuredClone(jwks);
-      }
-      jwks() {
-        return this.#jwks;
-      }
-      async getKey(protectedHeader, token) {
-        const { alg, kid } = { ...protectedHeader, ...token?.header };
-        const kty = getKtyFromAlg(alg);
-        const candidates = this.#jwks.keys.filter((jwk2) => {
-          let candidate = kty === jwk2.kty;
-          if (candidate && typeof kid === "string") {
-            candidate = kid === jwk2.kid;
-          }
-          if (candidate && (typeof jwk2.alg === "string" || kty === "AKP")) {
-            candidate = alg === jwk2.alg;
-          }
-          if (candidate && typeof jwk2.use === "string") {
-            candidate = jwk2.use === "sig";
-          }
-          if (candidate && Array.isArray(jwk2.key_ops)) {
-            candidate = jwk2.key_ops.includes("verify");
-          }
-          if (candidate) {
-            switch (alg) {
-              case "ES256":
-                candidate = jwk2.crv === "P-256";
-                break;
-              case "ES384":
-                candidate = jwk2.crv === "P-384";
-                break;
-              case "ES512":
-                candidate = jwk2.crv === "P-521";
-                break;
-              case "Ed25519":
-              case "EdDSA":
-                candidate = jwk2.crv === "Ed25519";
-                break;
-            }
-          }
-          return candidate;
-        });
-        const { 0: jwk, length } = candidates;
-        if (length === 0) {
-          throw new JWKSNoMatchingKey();
-        }
-        if (length !== 1) {
-          const error48 = new JWKSMultipleMatchingKeys();
-          const _cached = this.#cached;
-          error48[Symbol.asyncIterator] = async function* () {
-            for (const jwk2 of candidates) {
-              try {
-                yield await importWithAlgCache(_cached, jwk2, alg);
-              } catch {
-              }
-            }
-          };
-          throw error48;
-        }
-        return importWithAlgCache(this.#cached, jwk, alg);
-      }
-    };
-  }
-});
-
-// node_modules/jose/dist/webapi/jwks/remote.js
-function isCloudflareWorkers() {
-  return typeof WebSocketPair !== "undefined" || typeof navigator !== "undefined" && navigator.userAgent === "Cloudflare-Workers" || typeof EdgeRuntime !== "undefined" && EdgeRuntime === "vercel";
-}
-async function fetchJwks(url2, headers, signal, fetchImpl = fetch) {
-  const response = await fetchImpl(url2, {
-    method: "GET",
-    signal,
-    redirect: "manual",
-    headers
-  }).catch((err) => {
-    if (err.name === "TimeoutError") {
-      throw new JWKSTimeout();
-    }
-    throw err;
-  });
-  if (response.status !== 200) {
-    throw new JOSEError("Expected 200 OK from the JSON Web Key Set HTTP response");
-  }
-  try {
-    return await response.json();
-  } catch {
-    throw new JOSEError("Failed to parse the JSON Web Key Set HTTP response as JSON");
-  }
-}
-function isFreshJwksCache(input, cacheMaxAge) {
-  if (typeof input !== "object" || input === null) {
-    return false;
-  }
-  if (!("uat" in input) || typeof input.uat !== "number" || Date.now() - input.uat >= cacheMaxAge) {
-    return false;
-  }
-  if (!("jwks" in input) || !isObject3(input.jwks) || !Array.isArray(input.jwks.keys) || !Array.prototype.every.call(input.jwks.keys, isObject3)) {
-    return false;
-  }
-  return true;
-}
-function createRemoteJWKSet(url2, options) {
-  const set2 = new RemoteJWKSet(url2, options);
-  const remoteJWKSet = async (protectedHeader, token) => set2.getKey(protectedHeader, token);
-  Object.defineProperties(remoteJWKSet, {
-    coolingDown: {
-      get: () => set2.coolingDown(),
-      enumerable: true,
-      configurable: false
-    },
-    fresh: {
-      get: () => set2.fresh(),
-      enumerable: true,
-      configurable: false
-    },
-    reload: {
-      value: () => set2.reload(),
-      enumerable: true,
-      configurable: false,
-      writable: false
-    },
-    reloading: {
-      get: () => set2.pendingFetch(),
-      enumerable: true,
-      configurable: false
-    },
-    jwks: {
-      value: () => set2.jwks(),
-      enumerable: true,
-      configurable: false,
-      writable: false
-    }
-  });
-  return remoteJWKSet;
-}
-var USER_AGENT, customFetch, jwksCache, RemoteJWKSet;
-var init_remote = __esm({
-  "node_modules/jose/dist/webapi/jwks/remote.js"() {
-    init_errors4();
-    init_local();
-    init_is_object();
-    if (typeof navigator === "undefined" || !navigator.userAgent?.startsWith?.("Mozilla/5.0 ")) {
-      const NAME = "jose";
-      const VERSION = "v6.1.3";
-      USER_AGENT = `${NAME}/${VERSION}`;
-    }
-    customFetch = /* @__PURE__ */ Symbol();
-    jwksCache = /* @__PURE__ */ Symbol();
-    RemoteJWKSet = class {
-      #url;
-      #timeoutDuration;
-      #cooldownDuration;
-      #cacheMaxAge;
-      #jwksTimestamp;
-      #pendingFetch;
-      #headers;
-      #customFetch;
-      #local;
-      #cache;
-      constructor(url2, options) {
-        if (!(url2 instanceof URL)) {
-          throw new TypeError("url must be an instance of URL");
-        }
-        this.#url = new URL(url2.href);
-        this.#timeoutDuration = typeof options?.timeoutDuration === "number" ? options?.timeoutDuration : 5e3;
-        this.#cooldownDuration = typeof options?.cooldownDuration === "number" ? options?.cooldownDuration : 3e4;
-        this.#cacheMaxAge = typeof options?.cacheMaxAge === "number" ? options?.cacheMaxAge : 6e5;
-        this.#headers = new Headers(options?.headers);
-        if (USER_AGENT && !this.#headers.has("User-Agent")) {
-          this.#headers.set("User-Agent", USER_AGENT);
-        }
-        if (!this.#headers.has("accept")) {
-          this.#headers.set("accept", "application/json");
-          this.#headers.append("accept", "application/jwk-set+json");
-        }
-        this.#customFetch = options?.[customFetch];
-        if (options?.[jwksCache] !== void 0) {
-          this.#cache = options?.[jwksCache];
-          if (isFreshJwksCache(options?.[jwksCache], this.#cacheMaxAge)) {
-            this.#jwksTimestamp = this.#cache.uat;
-            this.#local = createLocalJWKSet(this.#cache.jwks);
-          }
-        }
-      }
-      pendingFetch() {
-        return !!this.#pendingFetch;
-      }
-      coolingDown() {
-        return typeof this.#jwksTimestamp === "number" ? Date.now() < this.#jwksTimestamp + this.#cooldownDuration : false;
-      }
-      fresh() {
-        return typeof this.#jwksTimestamp === "number" ? Date.now() < this.#jwksTimestamp + this.#cacheMaxAge : false;
-      }
-      jwks() {
-        return this.#local?.jwks();
-      }
-      async getKey(protectedHeader, token) {
-        if (!this.#local || !this.fresh()) {
-          await this.reload();
-        }
-        try {
-          return await this.#local(protectedHeader, token);
-        } catch (err) {
-          if (err instanceof JWKSNoMatchingKey) {
-            if (this.coolingDown() === false) {
-              await this.reload();
-              return this.#local(protectedHeader, token);
-            }
-          }
-          throw err;
-        }
-      }
-      async reload() {
-        if (this.#pendingFetch && isCloudflareWorkers()) {
-          this.#pendingFetch = void 0;
-        }
-        this.#pendingFetch ||= fetchJwks(this.#url.href, this.#headers, AbortSignal.timeout(this.#timeoutDuration), this.#customFetch).then((json3) => {
-          this.#local = createLocalJWKSet(json3);
-          if (this.#cache) {
-            this.#cache.uat = Date.now();
-            this.#cache.jwks = json3;
-          }
-          this.#jwksTimestamp = Date.now();
-          this.#pendingFetch = void 0;
-        }).catch((err) => {
-          this.#pendingFetch = void 0;
-          throw err;
-        });
-        await this.#pendingFetch;
-      }
-    };
-  }
-});
-
 // node_modules/jose/dist/webapi/index.js
 var init_webapi = __esm({
   "node_modules/jose/dist/webapi/index.js"() {
     init_verify4();
     init_sign4();
-    init_remote();
-  }
-});
-
-// contracts/errors.ts
-function appError(status, message2) {
-  return { tag: "app_error", status, message: message2 };
-}
-var Errors;
-var init_errors5 = __esm({
-  "contracts/errors.ts"() {
-    Errors = {
-      badRequest: (msg) => appError(400, msg),
-      unauthorized: (msg) => appError(401, msg),
-      forbidden: (msg) => appError(403, msg),
-      notFound: (msg) => appError(404, msg),
-      internal: (msg) => appError(500, msg)
-    };
   }
 });
 
@@ -50142,20 +49942,16 @@ var init_session3 = __esm({
 });
 
 // server/kimi/platform.ts
-async function kimiRequest(path, token, init) {
-  const resp = await fetch(`${env.kimiOpenUrl}${path}`, {
-    ...init,
+async function getGoogleProfile(accessToken) {
+  const resp = await fetch("https://www.googleapis.com/oauth2/v2/userinfo", {
     headers: {
       Accept: "application/json",
-      Authorization: `Bearer ${token}`,
-      ...init?.headers
+      Authorization: `Bearer ${accessToken}`
     }
   });
   if (!resp.ok) {
     const text2 = await resp.text();
-    console.warn(
-      `[kimi] Request to ${path} failed (${resp.status}): ${text2}`
-    );
+    console.warn(`[google] userinfo failed (${resp.status}): ${text2}`);
     return null;
   }
   return resp.json();
@@ -50163,21 +49959,20 @@ async function kimiRequest(path, token, init) {
 var users2;
 var init_platform = __esm({
   "server/kimi/platform.ts"() {
-    init_env();
     users2 = {
-      getProfile: (token) => kimiRequest("/v1/users/me/profile", token)
+      getProfile: getGoogleProfile
     };
   }
 });
 
 // server/queries/users.ts
 async function findUserByUnionId(unionId) {
-  if (isMock3) return mockUserByUnionId.get(unionId);
+  if (isMock5) return mockUserByUnionId.get(unionId);
   const rows = await getDb().select().from(users).where(eq(users.unionId, unionId)).limit(1);
   return rows.at(0);
 }
 async function upsertUser(data) {
-  if (isMock3) {
+  if (isMock5) {
     const existing = mockUserByUnionId.get(data.unionId);
     const isOwner = data.unionId === env.ownerUnionId && !!env.ownerUnionId;
     const user = existing ? { ...existing, ...data, updatedAt: /* @__PURE__ */ new Date(), lastSignInAt: data.lastSignInAt ?? /* @__PURE__ */ new Date() } : {
@@ -50204,7 +49999,7 @@ async function upsertUser(data) {
   }
   await getDb().insert(users).values(values).onDuplicateKeyUpdate({ set: updateSet });
 }
-var mockUserById, mockUserByUnionId, mockNextUserId, isMock3;
+var mockUserById, mockUserByUnionId, mockNextUserId, isMock5;
 var init_users = __esm({
   "server/queries/users.ts"() {
     init_drizzle_orm();
@@ -50214,8 +50009,8 @@ var init_users = __esm({
     mockUserById = /* @__PURE__ */ new Map();
     mockUserByUnionId = /* @__PURE__ */ new Map();
     mockNextUserId = 5;
-    isMock3 = !env.databaseUrl;
-    if (isMock3) {
+    isMock5 = !env.databaseUrl;
+    if (isMock5) {
       const seed = (u) => {
         mockUserById.set(u.id, u);
         mockUserByUnionId.set(u.unionId, u);
@@ -50234,36 +50029,20 @@ async function exchangeAuthCode(code, redirectUri) {
   const body = new URLSearchParams({
     grant_type: "authorization_code",
     code,
-    client_id: env.appId,
-    redirect_uri: redirectUri,
-    client_secret: env.appSecret
+    client_id: env.googleClientId,
+    client_secret: env.googleClientSecret,
+    redirect_uri: redirectUri
   });
-  const resp = await fetch(`${env.kimiAuthUrl}/api/oauth/token`, {
+  const resp = await fetch("https://oauth2.googleapis.com/token", {
     method: "POST",
     headers: { "Content-Type": "application/x-www-form-urlencoded" },
     body: body.toString()
   });
   if (!resp.ok) {
     const text2 = await resp.text();
-    throw new Error(`Token exchange failed (${resp.status}): ${text2}`);
+    throw new Error(`Google token exchange failed (${resp.status}): ${text2}`);
   }
   return resp.json();
-}
-function getJwks() {
-  if (!_jwks) {
-    if (!env.kimiAuthUrl) throw new Error("KIMI_AUTH_URL is not configured");
-    _jwks = createRemoteJWKSet(new URL(`${env.kimiAuthUrl}/api/.well-known/jwks.json`));
-  }
-  return _jwks;
-}
-async function verifyAccessToken(accessToken) {
-  const { payload } = await jwtVerify(accessToken, getJwks());
-  const userId = payload.user_id;
-  const clientId = payload.client_id;
-  if (!userId) {
-    throw new Error("user_id missing from access token");
-  }
-  return { userId, clientId };
 }
 async function authenticateRequest(headers) {
   const cookies = cookie2.parse(headers.get("cookie") || "");
@@ -50287,36 +50066,33 @@ function createOAuthCallbackHandler() {
     const code = c.req.query("code");
     const state = c.req.query("state");
     const error48 = c.req.query("error");
-    const errorDescription = c.req.query("error_description");
     if (error48) {
-      if (error48 === "access_denied") {
-        return c.redirect("/", 302);
-      }
-      return c.json(
-        { error: error48, error_description: errorDescription },
-        400
-      );
+      if (error48 === "access_denied") return c.redirect("/", 302);
+      return c.json({ error: error48, error_description: c.req.query("error_description") }, 400);
     }
     if (!code || !state) {
       return c.json({ error: "code and state are required" }, 400);
     }
+    if (!env.googleClientId || !env.googleClientSecret) {
+      return c.json({ error: "Google OAuth is not configured on this server" }, 500);
+    }
     try {
       const redirectUri = atob(state);
       const tokenResp = await exchangeAuthCode(code, redirectUri);
-      const { userId } = await verifyAccessToken(tokenResp.access_token);
       const userProfile = await users2.getProfile(tokenResp.access_token);
       if (!userProfile) {
-        throw new Error("Failed to fetch user profile from Kimi Open");
+        throw new Error("Failed to fetch user profile from Google");
       }
+      const googleId = userProfile.id;
       await upsertUser({
-        unionId: userId,
+        unionId: googleId,
         name: userProfile.name,
-        avatar: userProfile.avatar_url,
+        avatar: userProfile.picture ?? null,
         lastSignInAt: /* @__PURE__ */ new Date()
       });
       const token = await signSessionToken({
-        unionId: userId,
-        clientId: env.appId
+        unionId: googleId,
+        clientId: env.googleClientId
       });
       const cookieOpts = getSessionCookieOptions(c.req.raw.headers);
       setCookie(c, Session.cookieName, token, {
@@ -50324,26 +50100,24 @@ function createOAuthCallbackHandler() {
         maxAge: Session.maxAgeMs / 1e3
       });
       return c.redirect("/#/app", 302);
-    } catch (error49) {
-      console.error("[OAuth] Callback failed", error49);
+    } catch (err) {
+      console.error("[OAuth] Google callback failed", err);
       return c.json({ error: "OAuth callback failed" }, 500);
     }
   };
 }
-var cookie2, _jwks;
+var cookie2;
 var init_auth = __esm({
   "server/kimi/auth.ts"() {
     init_cookie2();
-    init_webapi();
     cookie2 = __toESM(require_dist(), 1);
     init_env();
     init_cookies();
     init_constants3();
-    init_errors5();
+    init_errors4();
     init_session3();
     init_platform();
     init_users();
-    _jwks = null;
   }
 });
 
@@ -50383,7 +50157,7 @@ var init_app = __esm({
     init_constants3();
     app = new Hono2();
     app.get(Paths.oauthCallback, createOAuthCallbackHandler());
-    if (!env.isProduction || !env.kimiAuthUrl) {
+    if (!env.isProduction || !env.googleClientId) {
       app.get("/api/dev-login", async (c) => {
         const DEV_UNION_ID = "dev-user-local";
         await upsertUser({

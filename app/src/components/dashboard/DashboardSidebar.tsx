@@ -3,12 +3,12 @@ import type { ActiveTab } from './types';
 import type { User as AuthUser } from '@db/schema';
 
 const NAV_ITEMS = [
-  { icon: Home, label: 'Inicio', tab: 'feed' as ActiveTab },
-  { icon: TrendingUp, label: 'Explorar', tab: 'explore' as ActiveTab },
-  { icon: Bell, label: 'Notificaciones', tab: 'notifications' as ActiveTab },
-  { icon: Mail, label: 'Mensajes', tab: 'messages' as ActiveTab },
-  { icon: Bookmark, label: 'Guardados', tab: null },
-  { icon: User, label: 'Perfil', tab: null },
+  { icon: Home,       label: 'Inicio',         tab: 'feed'          as ActiveTab },
+  { icon: TrendingUp, label: 'Explorar',        tab: 'explore'       as ActiveTab },
+  { icon: Bell,       label: 'Notificaciones',  tab: 'notifications' as ActiveTab },
+  { icon: Mail,       label: 'Mensajes',        tab: 'messages'      as ActiveTab },
+  { icon: Bookmark,   label: 'Guardados',       tab: 'bookmarks'     as ActiveTab },
+  { icon: User,       label: 'Perfil',          tab: 'profile'       as ActiveTab },
 ];
 
 interface DashboardSidebarProps {
@@ -54,7 +54,7 @@ export default function DashboardSidebar({
               {NAV_ITEMS.map((item) => (
                 <button
                   key={item.label}
-                  onClick={() => { if (item.tab) { onTabChange(item.tab); onCloseMobile(); } }}
+                  onClick={() => { onTabChange(item.tab); onCloseMobile(); }}
                   className={`w-full flex items-center gap-3 px-3 py-3 text-sm rounded-lg transition-colors ${
                     activeTab === item.tab
                       ? 'text-[#e1ff00] bg-[#e1ff00]/10 font-medium'
@@ -94,7 +94,7 @@ export default function DashboardSidebar({
           {NAV_ITEMS.map((item) => (
             <button
               key={item.label}
-              onClick={() => item.tab && onTabChange(item.tab)}
+              onClick={() => onTabChange(item.tab)}
               className={`w-full flex items-center gap-4 px-4 py-3 text-[15px] rounded-xl transition-colors text-left ${
                 activeTab === item.tab ? 'text-[#e1ff00] font-bold' : 'text-[#f3f2f2] hover:bg-[#1E2535]'
               }`}

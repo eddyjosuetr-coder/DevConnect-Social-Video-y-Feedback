@@ -36,6 +36,7 @@ export const posts = mysqlTable("posts", {
   tags: varchar("tags", { length: 500 }),
   likesCount: int("likesCount").default(0).notNull(),
   commentsCount: int("commentsCount").default(0).notNull(),
+  repostsCount: int("repostsCount").default(0).notNull(),
   createdAt: timestamp("createdAt").defaultNow().notNull(),
   updatedAt: timestamp("updatedAt").defaultNow().notNull().$onUpdate(() => new Date()),
 });
@@ -58,3 +59,23 @@ export const comments = mysqlTable("comments", {
   content: text("content").notNull(),
   createdAt: timestamp("createdAt").defaultNow().notNull(),
 });
+
+// ── Reposts ──
+export const reposts = mysqlTable("reposts", {
+  id: serial("id").primaryKey(),
+  postId: bigint("postId", { mode: "number", unsigned: true }).notNull(),
+  userId: bigint("userId", { mode: "number", unsigned: true }).notNull(),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+}, (table) => ({
+  userPostUnique: uniqueIndex("reposts_user_post_idx").on(table.postId, table.userId),
+}));
+
+// ── Follows ──
+export const follows = mysqlTable("follows", {
+  id: serial("id").primaryKey(),
+  followerId: bigint("followerId", { mode: "number", unsigned: true }).notNull(),
+  followingId: bigint("followingId", { mode: "number", unsigned: true }).notNull(),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+}, (table) => ({
+  uniqueFollow: uniqueIndex("follows_follower_following_idx").on(table.followerId, table.followingId),
+}));

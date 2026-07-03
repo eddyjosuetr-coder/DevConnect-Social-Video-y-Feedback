@@ -14,7 +14,7 @@ import { Paths, Session } from "@contracts/constants";
 const app = new Hono<{ Bindings: HttpBindings }>();
 app.get(Paths.oauthCallback, createOAuthCallbackHandler());
 
-if (!env.isProduction || !env.kimiAuthUrl) {
+if (!env.isProduction || !env.googleClientId) {
   app.get("/api/dev-login", async (c) => {
     const DEV_UNION_ID = "dev-user-local";
     await upsertUser({

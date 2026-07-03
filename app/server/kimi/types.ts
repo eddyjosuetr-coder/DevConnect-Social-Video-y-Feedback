@@ -1,5 +1,7 @@
+// Google OAuth token response
 export type TokenResponse = {
   access_token: string;
+  id_token?: string;
   token_type: string;
   expires_in: number;
   refresh_token?: string;
@@ -11,8 +13,13 @@ export type SessionPayload = {
   clientId: string;
 };
 
+// Google userinfo response (/oauth2/v2/userinfo)
 export type UserProfile = {
-  user_id: string;
+  id: string;
+  email: string;
   name: string;
-  avatar_url: string;
+  given_name?: string;
+  family_name?: string;
+  picture?: string;
+  verified_email?: boolean;
 };

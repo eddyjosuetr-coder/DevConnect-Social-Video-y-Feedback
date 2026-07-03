@@ -10,6 +10,7 @@ export type PostRow = {
   tags: string | null;
   likesCount: number;
   commentsCount: number;
+  repostsCount: number;
   createdAt: Date;
   authorId: number;
   authorName: string | null;
@@ -26,7 +27,7 @@ export const mockPosts: StoredPost[] = [
     id: 1, userId: 2,
     content: "Acabo de deployar mi primer proyecto con tRPC + React 19. La type-safety end-to-end es un game changer 🚀",
     code: null, codeLanguage: null, tags: "trpc,react,typescript",
-    likesCount: 5, commentsCount: 1,
+    likesCount: 5, commentsCount: 1, repostsCount: 3,
     createdAt: new Date(Date.now() - 2 * 3600000),
     authorId: 2, authorName: "Alejandro Marin", authorAvatar: null,
   },
@@ -35,7 +36,7 @@ export const mockPosts: StoredPost[] = [
     content: "Patron que uso para manejar errores en TypeScript sin excepciones:",
     code: `type Result<T, E = Error> = { ok: true; value: T } | { ok: false; error: E };\n\nasync function fetchUser(id: string): Promise<Result<User>> {\n  const res = await fetch(\`/api/users/\${id}\`);\n  if (!res.ok) return { ok: false, error: new Error('Not found') };\n  return { ok: true, value: await res.json() };\n}`,
     codeLanguage: "typescript", tags: "typescript,patterns",
-    likesCount: 18, commentsCount: 2,
+    likesCount: 18, commentsCount: 2, repostsCount: 7,
     createdAt: new Date(Date.now() - 5 * 3600000),
     authorId: 3, authorName: "Sofia Jimenez", authorAvatar: null,
   },
@@ -44,7 +45,7 @@ export const mockPosts: StoredPost[] = [
     content: "Tip: usa CSS container queries en lugar de media queries para componentes realmente reutilizables.",
     code: `@container (min-width: 400px) {\n  .card {\n    display: grid;\n    grid-template-columns: auto 1fr;\n  }\n}`,
     codeLanguage: "css", tags: "css,webdev",
-    likesCount: 9, commentsCount: 0,
+    likesCount: 9, commentsCount: 0, repostsCount: 2,
     createdAt: new Date(Date.now() - 24 * 3600000),
     authorId: 4, authorName: "Carlos Rivera", authorAvatar: null,
   },
@@ -72,6 +73,7 @@ export async function listPosts(): Promise<PostRow[]> {
       tags: posts.tags,
       likesCount: posts.likesCount,
       commentsCount: posts.commentsCount,
+      repostsCount: posts.repostsCount,
       createdAt: posts.createdAt,
       authorId: posts.userId,
       authorName: users.name,
@@ -96,7 +98,7 @@ export async function createPost(data: {
     mockPosts.unshift({
       id, userId: data.userId,
       content: data.content, code: data.code, codeLanguage: data.codeLanguage, tags: data.tags,
-      likesCount: 0, commentsCount: 0,
+      likesCount: 0, commentsCount: 0, repostsCount: 0,
       createdAt: new Date(),
       authorId: data.userId, authorName: data.authorName, authorAvatar: data.authorAvatar,
     });
