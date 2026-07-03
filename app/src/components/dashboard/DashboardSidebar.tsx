@@ -83,17 +83,13 @@ export default function DashboardSidebar({
   const sidebarContent = (isMobile = false) => (
     <>
       {/* Logo */}
-      <div className="flex items-center gap-2.5 mb-8 px-4">
+      <div className="flex items-center mb-8 px-4">
         <img
           src="/images/logo-icon.png"
           alt="DevConnect"
-          className="w-9 h-9 object-contain"
-          style={{ filter: 'drop-shadow(0 0 8px rgba(225,255,0,0.6))' }}
+          className="w-14 h-14 object-contain"
+          style={{ filter: 'drop-shadow(0 0 14px rgba(225,255,0,0.75))' }}
         />
-        <div className="flex items-baseline">
-          <span className="text-[#f3f2f2] font-black text-lg tracking-tight">DevConnect</span>
-          <CursorBlink />
-        </div>
         {isMobile && (
           <button onClick={onCloseMobile} className="ml-auto text-[#5A6680] hover:text-[#f3f2f2]">
             <X size={20} />
