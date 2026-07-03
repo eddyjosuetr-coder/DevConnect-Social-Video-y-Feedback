@@ -117,7 +117,7 @@ export default function Login() {
             {/* Logo */}
             <div className="flex items-center gap-3 mb-2">
               <img
-                src="/images/logo-icon.png"
+                src="/images/logo-solocara.png"
                 alt="DevConnect"
                 className="w-12 h-12 object-contain"
                 style={{ filter: 'drop-shadow(0 0 10px rgba(225,255,0,0.7))' }}

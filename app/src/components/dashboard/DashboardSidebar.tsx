@@ -85,7 +85,7 @@ export default function DashboardSidebar({
       {/* Logo */}
       <div className="flex items-center mb-8 px-4">
         <img
-          src="/images/logo-icon.png"
+          src="/images/logo-solocara.png"
           alt="DevConnect"
           className="w-14 h-14 object-contain"
           style={{ filter: 'drop-shadow(0 0 14px rgba(225,255,0,0.75))' }}
