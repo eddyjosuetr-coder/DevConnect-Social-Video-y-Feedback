@@ -24,10 +24,9 @@ export default function Hero({ onRegister, onLogin }: HeroProps) {
   useEffect(() => {
     const tl = gsap.timeline({ delay: 0.2 });
     tl.fromTo(logoRef.current,
-        { opacity: 0, scale: 0.75, filter: 'blur(16px)' },
-        { opacity: 1, scale: 1, filter: 'blur(0px)', duration: 1.1, ease: 'expo.out' })
-      .fromTo(metaRef.current,  { opacity: 0, y: 16 }, { opacity: 1, y: 0, duration: 0.6, ease: 'expo.out' }, '-=0.5')
-      .fromTo(titleRef.current, { opacity: 0, y: 48 }, { opacity: 1, y: 0, duration: 1,   ease: 'expo.out' }, '-=0.4')
+        { opacity: 0, scale: 0.8, filter: 'blur(16px)' },
+        { opacity: 1, scale: 1, filter: 'blur(0px)', duration: 1.2, ease: 'expo.out' })
+      .fromTo(titleRef.current, { opacity: 0, y: 48 }, { opacity: 1, y: 0, duration: 1,   ease: 'expo.out' }, '-=0.5')
       .fromTo(subRef.current,   { opacity: 0, y: 24 }, { opacity: 1, y: 0, duration: 0.7, ease: 'expo.out' }, '-=0.6')
       .fromTo(ctaRef.current,   { opacity: 0, y: 16 }, { opacity: 1, y: 0, duration: 0.5, ease: 'expo.out' }, '-=0.4')
       .fromTo(stackRef.current, { opacity: 0 },        { opacity: 1, duration: 0.6 }, '-=0.2');
@@ -57,21 +56,15 @@ export default function Hero({ onRegister, onLogin }: HeroProps) {
 
       {/* Hero content */}
       <div className="relative z-10 text-center px-6 max-w-4xl mx-auto pt-24 pb-36">
-        {/* Logo */}
-        <div className="flex justify-center mb-8">
+        {/* Logo with name */}
+        <div className="flex justify-center mb-8" ref={metaRef}>
           <img
             ref={logoRef}
-            src="/images/logo-solocara.png"
+            src="/images/logo-connombre.png"
             alt="DevConnect"
-            className="w-28 h-28 object-contain opacity-0"
-            style={{ filter: 'drop-shadow(0 0 28px rgba(225,255,0,0.75)) drop-shadow(0 0 56px rgba(225,255,0,0.3))' }}
+            className="w-[340px] max-w-[80vw] object-contain opacity-0"
+            style={{ filter: 'drop-shadow(0 0 32px rgba(225,255,0,0.55)) drop-shadow(0 0 64px rgba(225,255,0,0.2))' }}
           />
-        </div>
-
-        <div ref={metaRef} className="mb-7 opacity-0">
-          <span className="inline-block font-mono text-xs tracking-[0.25em] text-[#e1ff00] border border-[#e1ff00]/30 px-5 py-2">
-            RED SOCIAL PARA DESARROLLADORES
-          </span>
         </div>
 
         <h1
