@@ -116,7 +116,12 @@ export default function Login() {
           <div ref={formRef} className="login-form-panel opacity-0">
             {/* Logo */}
             <div className="flex items-center gap-3 mb-2">
-              <img src="/images/logo.png" alt="DevConnect" className="w-10 h-10 object-contain" />
+              <img
+                src="/images/logo-icon.png"
+                alt="DevConnect"
+                className="w-12 h-12 object-contain"
+                style={{ filter: 'drop-shadow(0 0 10px rgba(225,255,0,0.7))' }}
+              />
               <div>
                 <h1 className="text-2xl font-bold text-[#f3f2f2]">DevConnect</h1>
                 <p className="text-[#5A6680] text-sm">La red social para desarrolladores</p>

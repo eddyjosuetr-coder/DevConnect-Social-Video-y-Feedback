@@ -130,7 +130,7 @@ export default function Dashboard() {
               <line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="18" x2="21" y2="18"/>
             </svg>
           </button>
-          <img src="/images/logo.png" alt="DevConnect" className="w-7 h-7" />
+          <img src="/images/logo-icon.png" alt="DevConnect" className="w-7 h-7 object-contain" style={{ filter: 'drop-shadow(0 0 6px rgba(225,255,0,0.6))' }} />
           <div className="w-8 h-8 rounded-full bg-[#e1ff00] flex items-center justify-center text-[#050507] font-bold text-xs">
             {user.name?.charAt(0) ?? 'U'}
           </div>

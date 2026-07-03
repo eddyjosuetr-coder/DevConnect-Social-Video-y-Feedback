@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { Home, TrendingUp, Bell, Mail, Bookmark, User, X, LogOut, Zap } from 'lucide-react';
+import { Home, TrendingUp, Bell, Mail, Bookmark, User, X, LogOut } from 'lucide-react';
 import type { ActiveTab } from './types';
 import type { User as AuthUser } from '@db/schema';
 
@@ -84,9 +84,12 @@ export default function DashboardSidebar({
     <>
       {/* Logo */}
       <div className="flex items-center gap-2.5 mb-8 px-4">
-        <div className="w-8 h-8 bg-[#e1ff00] rounded flex items-center justify-center">
-          <Zap size={18} className="text-[#050507]" strokeWidth={2.5} />
-        </div>
+        <img
+          src="/images/logo-icon.png"
+          alt="DevConnect"
+          className="w-9 h-9 object-contain"
+          style={{ filter: 'drop-shadow(0 0 8px rgba(225,255,0,0.6))' }}
+        />
         <div className="flex items-baseline">
           <span className="text-[#f3f2f2] font-black text-lg tracking-tight">DevConnect</span>
           <CursorBlink />
