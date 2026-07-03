@@ -50,7 +50,7 @@ export default function Navbar({ user, onLogin, onRegister, onLogout, onSearchOp
         <div className="max-w-7xl mx-auto px-6 flex items-center justify-between h-16">
           {/* Logo */}
           <button onClick={() => scrollTo('#hero')} className="flex items-center gap-2.5">
-            <img src="/images/logo.png" alt="DevConnect" className="w-8 h-8 object-contain" />
+            <img src="/images/logo-solocara.png" alt="DevConnect" className="w-8 h-8 object-contain" style={{ filter: 'drop-shadow(0 0 6px rgba(225,255,0,0.6))' }} />
             <span className="text-[#f3f2f2] font-bold text-lg tracking-tight hidden sm:inline">DevConnect</span>
           </button>
 

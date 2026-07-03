@@ -22,47 +22,56 @@ interface PostState {
 
 const initialPosts = [
   {
-    author: 'Alejandro Marin',
-    username: '@alexmarin',
+    author: 'eddy trejo',
+    username: '@eddyjosuetr',
+    avatar: '/images/logo-solocara.png',
+    time: '1h',
+    content: 'Acabo de lanzar DevConnect, mi red social para devs con tRPC + React 19 + MySQL. Full type-safety end-to-end 🚀',
+    code: `const router = t.router({
+  posts: t.procedure
+    .input(z.object({ content: z.string() }))
+    .mutation(async ({ input, ctx }) => {
+      return db.insert(posts).values({
+        content: input.content,
+        authorId: ctx.user.id,
+      });
+    }),
+});`,
+    likes: 1,
+    comments: 0,
+    reposts: 0,
+    tags: ['trpc', 'react', 'typescript', 'opensource'],
+  },
+  {
+    author: 'dev demo',
+    username: '@devdemo',
     avatar: '/images/profile1.jpg',
-    time: '2h',
-    content: 'Acabo de deployar mi nuevo proyecto con React 19 y Server Components. El performance es increible, los tiempos de carga se redujeron un 60%.',
+    time: '3h',
+    content: 'Hook personalizado para debounce en React. Simple pero lo uso en casi todos mis proyectos.',
+    code: `function useDebounce<T>(value: T, delay: number): T {
+  const [debounced, setDebounced] = useState(value);
+  useEffect(() => {
+    const t = setTimeout(() => setDebounced(value), delay);
+    return () => clearTimeout(t);
+  }, [value, delay]);
+  return debounced;
+}`,
+    likes: 18,
+    comments: 4,
+    reposts: 7,
+    tags: ['react', 'hooks', 'typescript'],
+  },
+  {
+    author: 'dev demo',
+    username: '@devdemo2',
+    avatar: '/images/profile3.jpg',
+    time: '5h',
+    content: 'Tip: usa el operador satisfies de TypeScript para validar tipos sin perder el tipo inferido. Un cambio pequeño que salva mucho debugging.',
     code: null as string | null,
-    likes: 24,
-    comments: 8,
-    reposts: 3,
-    tags: ['react', 'servercomponents', 'performance'],
-  },
-  {
-    author: 'Yuki Tanaka',
-    username: '@yukit',
-    avatar: '/images/profile6.jpg',
-    time: '4h',
-    content: 'Nuevo pipeline CI/CD con GitHub Actions + Terraform. Deploy automatico a multi-region en menos de 3 minutos.',
-    code: `name: Deploy Multi-Region
-on: [push]
-jobs:
-  deploy:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - run: terraform apply -auto-approve`,
-    likes: 47,
-    comments: 15,
-    reposts: 12,
-    tags: ['devops', 'terraform', 'githubactions'],
-  },
-  {
-    author: 'Ravi Patel',
-    username: '@ravipatel',
-    avatar: '/images/profile8.jpg',
-    time: '6h',
-    content: 'Encontre una vulnerabilidad critica en una libreria muy usada. Ya reporte el issue y publique un patch temporal. Siempre audita tus dependencias.',
-    code: null,
-    likes: 132,
-    comments: 34,
-    reposts: 28,
-    tags: ['security', 'opensource', 'bugbounty'],
+    likes: 43,
+    comments: 9,
+    reposts: 14,
+    tags: ['typescript', 'tips'],
   },
 ];
 
