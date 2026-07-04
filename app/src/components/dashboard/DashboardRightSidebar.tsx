@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Search, X, Flame, Zap } from 'lucide-react';
+import { Search, X, Flame } from 'lucide-react';
 import type { TrendingTopic, SuggestedUser } from './types';
 
 interface DashboardRightSidebarProps {
@@ -56,29 +56,6 @@ export default function DashboardRightSidebar({
               <X size={13} />
             </button>
           )}
-        </div>
-
-        {/* Upgrade Card */}
-        <div className="rounded-xl overflow-hidden relative" style={{ background: 'linear-gradient(135deg, #0D1117 0%, #0A0D16 100%)', border: '1px solid #1E2535' }}>
-          <div className="absolute inset-0 opacity-5" style={{
-            backgroundImage: 'repeating-linear-gradient(0deg, transparent, transparent 20px, #e1ff00 20px, #e1ff00 21px), repeating-linear-gradient(90deg, transparent, transparent 20px, #e1ff00 20px, #e1ff00 21px)',
-          }} />
-          <div className="relative p-4">
-            <div className="flex items-center gap-2 mb-1.5">
-              <Zap size={14} className="text-[#e1ff00]" strokeWidth={2.5} />
-              <span className="text-xs font-mono text-[#e1ff00] tracking-widest uppercase">Pro</span>
-            </div>
-            <h3 className="text-[#f3f2f2] font-bold text-[15px] mb-1">DevConnect Pro</h3>
-            <p className="text-[#5A6680] text-xs leading-relaxed mb-3">
-              Insignia verificada, analytics avanzados y acceso anticipado a nuevas funciones.
-            </p>
-            <button
-              className="w-full text-[#050507] font-black py-2 rounded-lg text-sm transition-all hover:opacity-90 active:scale-95"
-              style={{ background: '#e1ff00', boxShadow: '0 0 16px rgba(225,255,0,0.3)' }}
-            >
-              Activar Pro
-            </button>
-          </div>
         </div>
 
         {/* Trending */}

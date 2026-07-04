@@ -1,23 +1,14 @@
 import { useRef, useEffect } from 'react';
 import gsap from 'gsap';
 import { ScrollTrigger } from 'gsap/ScrollTrigger';
-import { Github, MapPin, Coffee } from 'lucide-react';
+import { Github } from 'lucide-react';
 
 gsap.registerPlugin(ScrollTrigger);
 
-const STACK = [
-  { label: 'React 19',      color: '#61DAFB' },
-  { label: 'Vite 7',        color: '#646CFF' },
-  { label: 'TypeScript',    color: '#3178C6' },
-  { label: 'Hono',          color: '#E36002' },
-  { label: 'tRPC v11',      color: '#2596BE' },
-  { label: 'Drizzle ORM',   color: '#C5F74F' },
-  { label: 'MySQL',         color: '#4479A1' },
-  { label: 'Aiven Cloud',   color: '#FF5252' },
-  { label: 'GSAP',          color: '#88CE02' },
-  { label: 'Tailwind CSS',  color: '#06B6D4' },
-  { label: 'Google OAuth',  color: '#EA4335' },
-  { label: 'Vercel',        color: '#f3f2f2' },
+const PROOF_POINTS = [
+  { stat: '1',  label: 'Desarrollador',    desc: 'Solo yo. Ningún equipo, ningún colaborador externo.' },
+  { stat: '∞',  label: 'Horas de código',  desc: 'Noches y fines de semana convirtiendo ideas en features reales.' },
+  { stat: '0',  label: 'Inversión externa', desc: 'Proyecto personal 100%. Sin empresa, sin VC, sin nadie mas.' },
 ];
 
 export default function DeveloperGrid() {
@@ -25,19 +16,20 @@ export default function DeveloperGrid() {
 
   useEffect(() => {
     const ctx = gsap.context(() => {
-      gsap.fromTo('.creator-card',
-        { opacity: 0, y: 48 },
-        {
-          opacity: 1, y: 0, duration: 0.9, ease: 'expo.out',
-          scrollTrigger: { trigger: sectionRef.current, start: 'top 78%', toggleActions: 'play none none none' },
-        }
+      gsap.fromTo('.manifesto-text',
+        { opacity: 0, x: -50 },
+        { opacity: 1, x: 0, duration: 1.1, ease: 'expo.out',
+          scrollTrigger: { trigger: sectionRef.current, start: 'top 76%', toggleActions: 'play none none none' } }
       );
-      gsap.fromTo('.stack-tag',
-        { opacity: 0, scale: 0.75 },
-        {
-          opacity: 1, scale: 1, duration: 0.35, ease: 'back.out(1.6)', stagger: 0.04,
-          scrollTrigger: { trigger: '.stack-tags', start: 'top 88%', toggleActions: 'play none none none' },
-        }
+      gsap.fromTo('.creator-card',
+        { opacity: 0, x: 50 },
+        { opacity: 1, x: 0, duration: 1.1, ease: 'expo.out', delay: 0.12,
+          scrollTrigger: { trigger: sectionRef.current, start: 'top 76%', toggleActions: 'play none none none' } }
+      );
+      gsap.fromTo('.proof-item',
+        { opacity: 0, y: 32 },
+        { opacity: 1, y: 0, duration: 0.6, ease: 'power2.out', stagger: 0.1,
+          scrollTrigger: { trigger: '.proof-row', start: 'top 88%', toggleActions: 'play none none none' } }
       );
     }, sectionRef);
     return () => ctx.revert();
@@ -45,127 +37,147 @@ export default function DeveloperGrid() {
 
   return (
     <section ref={sectionRef} id="community" className="relative bg-[#050507] py-24 md:py-32 px-6 overflow-hidden">
-      {/* Background grid */}
-      <div className="absolute inset-0 opacity-[0.025]" style={{
-        backgroundImage: 'repeating-linear-gradient(0deg, #e1ff00 0px, #e1ff00 1px, transparent 1px, transparent 64px), repeating-linear-gradient(90deg, #e1ff00 0px, #e1ff00 1px, transparent 1px, transparent 64px)',
+      {/* Subtle grid */}
+      <div className="absolute inset-0 opacity-[0.022]" style={{
+        backgroundImage: 'repeating-linear-gradient(0deg,#e1ff00 0,#e1ff00 1px,transparent 1px,transparent 64px),repeating-linear-gradient(90deg,#e1ff00 0,#e1ff00 1px,transparent 1px,transparent 64px)',
       }} />
-      {/* Ambient */}
-      <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[600px] h-[300px] pointer-events-none"
-        style={{ background: 'radial-gradient(ellipse, rgba(225,255,0,0.05) 0%, transparent 70%)' }}
+      <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[900px] h-[400px] pointer-events-none"
+        style={{ background: 'radial-gradient(ellipse,rgba(225,255,0,0.045) 0%,transparent 65%)' }}
       />
 
-      <div className="max-w-4xl mx-auto relative z-10">
-        <div className="text-center mb-12">
-          <span className="font-mono text-xs text-[#00ffff] tracking-[0.25em] mb-4 block">EL PROYECTO</span>
-          <h2 className="font-medium text-[#f3f2f2] mb-4" style={{ fontSize: 'clamp(28px, 4vw, 50px)', letterSpacing: '-1.5px' }}>
-            Un solo desarrollador.<br /><span className="text-[#e1ff00]">Un stack completo.</span>
-          </h2>
-          <p className="text-[#5A6680] text-base max-w-xl mx-auto">
-            Sin equipo, sin inversión externa. Solo codigo, determinacion y las herramientas correctas.
-          </p>
+      <div className="max-w-6xl mx-auto relative z-10">
+
+        {/* Section divider */}
+        <div className="flex items-center gap-4 mb-16">
+          <div className="h-px flex-1" style={{ background: 'linear-gradient(90deg,transparent,#1E2535)' }} />
+          <span className="font-mono text-xs text-[#e1ff00] tracking-[0.25em]">EL PROYECTO</span>
+          <div className="h-px flex-1" style={{ background: 'linear-gradient(90deg,#1E2535,transparent)' }} />
         </div>
 
-        <div className="creator-card opacity-0 relative overflow-hidden" style={{
-          background: 'linear-gradient(135deg, #0A0D16 0%, #0D1117 100%)',
-          border: '1px solid #1E2535',
-        }}>
-          {/* Top accent line */}
-          <div className="absolute top-0 left-0 right-0 h-px"
-            style={{ background: 'linear-gradient(90deg, transparent, #e1ff00, transparent)' }}
-          />
-          {/* Corner decoration */}
-          <div className="absolute top-0 right-0 w-32 h-32 opacity-[0.04]"
-            style={{ background: 'radial-gradient(circle at top right, #e1ff00, transparent 70%)' }}
-          />
+        {/* Main: manifesto (left) + card (right) */}
+        <div className="grid grid-cols-1 lg:grid-cols-5 gap-12 lg:gap-20 items-center mb-20">
 
-          <div className="p-8 md:p-12">
-            <div className="flex flex-col md:flex-row items-center md:items-start gap-8">
-              {/* Avatar */}
-              <div className="relative shrink-0">
-                <div
-                  className="w-32 h-32 rounded-full overflow-hidden"
-                  style={{
-                    border: '2px solid rgba(225,255,0,0.35)',
-                    boxShadow: '0 0 32px rgba(225,255,0,0.2), 0 0 64px rgba(225,255,0,0.08)',
-                  }}
+          {/* Manifesto */}
+          <div className="manifesto-text lg:col-span-3 opacity-0">
+            <p className="font-mono text-xs text-[#3D4E68] tracking-widest mb-6">// 2026 — proyecto personal</p>
+            <h2
+              className="text-[#f3f2f2] font-black mb-8 leading-[1.05]"
+              style={{ fontSize: 'clamp(30px, 4.5vw, 60px)', letterSpacing: '-2px' }}
+            >
+              Ninguna red social<br />
+              entendía a los devs.<br />
+              <span className="text-[#e1ff00]">Así que construí la mía.</span>
+            </h2>
+            <p className="text-[#5A6680] text-base leading-relaxed max-w-lg mb-8">
+              DevConnect nació de una frustración real. Las redes existentes no fueron diseñadas para developers. No entienden código. No priorizan lo técnico. Entonces tomé la decisión y lo construí exactamente como quería usarlo.
+            </p>
+            <div className="flex items-center gap-3">
+              <div className="w-8 h-px bg-[#e1ff00]" />
+              <span className="text-[#8B9AB0] text-sm italic">"Si no existe, constrúyelo."</span>
+            </div>
+          </div>
+
+          {/* Creator card */}
+          <div className="creator-card lg:col-span-2 opacity-0">
+            <div className="relative overflow-hidden"
+              style={{ background: 'linear-gradient(145deg,#0A0D16 0%,#0D1117 100%)', border: '1px solid #1E2535' }}
+            >
+              {/* Top glow */}
+              <div className="absolute top-0 left-0 right-0 h-px"
+                style={{ background: 'linear-gradient(90deg,transparent,#e1ff00,transparent)' }}
+              />
+
+              <div className="p-6">
+                {/* Terminal dots */}
+                <div className="flex items-center gap-1.5 mb-5">
+                  <span className="w-2.5 h-2.5 rounded-full bg-[#FF5F57]" />
+                  <span className="w-2.5 h-2.5 rounded-full bg-[#FEBC2E]" />
+                  <span className="w-2.5 h-2.5 rounded-full bg-[#28C840]" />
+                  <span className="ml-3 font-mono text-xs text-[#3D4E68]">developer.json</span>
+                </div>
+
+                {/* Avatar + name */}
+                <div className="flex items-center gap-4 mb-5">
+                  <div className="relative shrink-0">
+                    <div className="w-16 h-16 rounded-full overflow-hidden"
+                      style={{ border: '2px solid rgba(225,255,0,0.3)', boxShadow: '0 0 24px rgba(225,255,0,0.18)' }}
+                    >
+                      <img src="/images/logo-solocara.png" alt="Eddy Trejo" className="w-full h-full object-cover" />
+                    </div>
+                    <span className="absolute -bottom-0.5 -right-0.5 w-4 h-4 rounded-full bg-[#22C55E]"
+                      style={{ border: '2px solid #0A0D16' }}
+                    />
+                  </div>
+                  <div>
+                    <div className="text-[#f3f2f2] font-bold text-lg leading-tight">Eddy Trejo</div>
+                    <div className="text-[#3D4E68] font-mono text-xs">@eddyjosuetr-coder</div>
+                    <div className="text-[#e1ff00] font-mono text-[10px] tracking-wider mt-1">FULL STACK DEV · VE 🇻🇪</div>
+                  </div>
+                </div>
+
+                {/* Code-style bio */}
+                <div className="mb-5 font-mono text-[11px] leading-relaxed p-4"
+                  style={{ background: '#060911', border: '1px solid #1E2535' }}
                 >
-                  <img
-                    src="/images/logo-solocara.png"
-                    alt="Eddy Trejo"
-                    className="w-full h-full object-cover"
-                  />
+                  <span className="text-[#e1ff00]">const</span>
+                  <span className="text-[#f3f2f2]"> dev </span>
+                  <span className="text-[#00ffff]">= </span>
+                  <span className="text-[#f3f2f2]">{'{'}</span>
+                  <br />
+                  <span className="pl-4 text-[#5A6680]">proyecto: </span>
+                  <span className="text-[#A5D6FF]">"DevConnect"</span>,<br />
+                  <span className="pl-4 text-[#5A6680]">equipo&nbsp;&nbsp;: </span>
+                  <span className="text-[#e1ff00]">1</span>,
+                  <span className="text-[#3D4E68]"> // solo yo</span><br />
+                  <span className="pl-4 text-[#5A6680]">inversion: </span>
+                  <span className="text-[#22C55E]">false</span>,<br />
+                  <span className="pl-4 text-[#5A6680]">funciona: </span>
+                  <span className="text-[#22C55E]">true</span><br />
+                  <span className="text-[#f3f2f2]">{'}'}</span>
                 </div>
-                <span
-                  className="absolute -bottom-1 -right-1 w-5 h-5 rounded-full flex items-center justify-center"
-                  style={{ backgroundColor: '#22C55E', border: '2px solid #0A0D16' }}
-                />
-              </div>
-
-              {/* Info */}
-              <div className="flex-1 text-center md:text-left">
-                <div className="flex flex-col md:flex-row md:items-center gap-2 mb-1">
-                  <h3 className="text-[#f3f2f2] font-black text-2xl tracking-tight">Eddy Trejo</h3>
-                  <span className="text-[#3D4E68] font-mono text-sm">@eddyjosuetr-coder</span>
-                </div>
-
-                <div className="flex items-center justify-center md:justify-start gap-4 mb-5 text-xs font-mono">
-                  <span className="text-[#e1ff00]">FULL STACK DEVELOPER</span>
-                  <span className="flex items-center gap-1 text-[#5A6680]">
-                    <MapPin size={10} />
-                    Venezuela
-                  </span>
-                  <span className="flex items-center gap-1 text-[#5A6680]">
-                    <Coffee size={10} />
-                    1 dev
-                  </span>
-                </div>
-
-                <p className="text-[#8B9AB0] text-sm leading-relaxed mb-6 max-w-lg">
-                  Construi DevConnect completamente solo: servidor Hono con tRPC v11, base de datos MySQL real en Aiven Cloud con Drizzle ORM, autenticacion Google OAuth 2.0, y un frontend React 19 con GSAP. Cada feature que ves en la app la programe yo.
-                </p>
 
                 <a
                   href="https://github.com/eddyjosuetr-coder"
                   target="_blank"
                   rel="noopener noreferrer"
-                  className="inline-flex items-center gap-2 text-sm font-mono px-4 py-2 transition-all hover:bg-[#e1ff00]/10"
-                  style={{
-                    color: '#e1ff00',
-                    border: '1px solid rgba(225,255,0,0.3)',
-                  }}
+                  className="flex items-center justify-center gap-2 text-sm font-mono py-2.5 transition-all hover:bg-[#e1ff00]/10 active:scale-95"
+                  style={{ color: '#e1ff00', border: '1px solid rgba(225,255,0,0.25)' }}
                 >
                   <Github size={14} />
-                  github.com/eddyjosuetr-coder
+                  Ver mi GitHub
                 </a>
               </div>
-            </div>
 
-            {/* Stack */}
-            <div className="stack-tags mt-8 pt-8" style={{ borderTop: '1px solid #1E2535' }}>
-              <p className="text-[10px] font-mono text-[#3D4E68] tracking-[0.2em] mb-4">STACK TECNOLÓGICO UTILIZADO</p>
-              <div className="flex flex-wrap gap-2">
-                {STACK.map((tech) => (
-                  <span
-                    key={tech.label}
-                    className="stack-tag text-[11px] font-mono px-3 py-1.5 opacity-0 transition-all hover:scale-105 cursor-default"
-                    style={{
-                      color: tech.color,
-                      border: `1px solid ${tech.color}28`,
-                      backgroundColor: `${tech.color}08`,
-                    }}
-                  >
-                    {tech.label}
-                  </span>
-                ))}
-              </div>
+              {/* Bottom glow */}
+              <div className="absolute bottom-0 left-0 right-0 h-px"
+                style={{ background: 'linear-gradient(90deg,transparent,rgba(225,255,0,0.15),transparent)' }}
+              />
             </div>
           </div>
-
-          {/* Bottom accent */}
-          <div className="absolute bottom-0 left-0 right-0 h-px"
-            style={{ background: 'linear-gradient(90deg, transparent, rgba(225,255,0,0.2), transparent)' }}
-          />
         </div>
+
+        {/* Proof points */}
+        <div className="proof-row grid grid-cols-1 md:grid-cols-3 gap-5">
+          {PROOF_POINTS.map((p) => (
+            <div
+              key={p.stat}
+              className="proof-item opacity-0 p-7 relative overflow-hidden transition-all duration-300 cursor-default"
+              style={{ background: '#0A0D16', border: '1px solid #1E2535' }}
+              onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.borderColor = 'rgba(225,255,0,0.25)'; }}
+              onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.borderColor = '#1E2535'; }}
+            >
+              <div
+                className="text-6xl font-black mb-3 text-[#e1ff00] leading-none"
+                style={{ textShadow: '0 0 24px rgba(225,255,0,0.45)' }}
+              >
+                {p.stat}
+              </div>
+              <div className="text-[#f3f2f2] font-bold text-base mb-2">{p.label}</div>
+              <p className="text-[#5A6680] text-sm leading-relaxed">{p.desc}</p>
+            </div>
+          ))}
+        </div>
+
       </div>
     </section>
   );

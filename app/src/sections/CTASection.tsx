@@ -54,7 +54,7 @@ export default function CTASection({ onRegister }: CTASectionProps) {
             className="bg-[#e1ff00] text-[#050507] font-bold px-9 py-4 text-sm tracking-wide hover:bg-[#f3f2f2] active:scale-95 transition-all w-full sm:w-auto"
             style={{ borderRadius: '9999px', boxShadow: '0 0 24px rgba(225,255,0,0.25)' }}
           >
-            Crear Cuenta Gratis
+            Crear Cuenta
           </button>
           <a
             href="https://github.com/eddyjosuetr-coder/DevConnect-Social-Video-y-Feedback"
@@ -68,7 +68,7 @@ export default function CTASection({ onRegister }: CTASectionProps) {
           </a>
         </div>
 
-        <p className="text-[#3D4E68] text-xs font-mono">GRATIS · SOLO REQUIERE UNA CUENTA GOOGLE</p>
+        <p className="text-[#3D4E68] text-xs font-mono">SOLO NECESITAS UNA CUENTA GOOGLE</p>
 
         {/* Bottom line */}
         <div className="absolute bottom-0 left-0 right-0 h-px"

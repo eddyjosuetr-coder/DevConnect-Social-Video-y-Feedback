@@ -6,11 +6,11 @@ interface HeroProps {
   onLogin: () => void;
 }
 
-const TECH_STACK = [
-  { label: 'React 19 + Vite 7', sub: 'Frontend' },
-  { label: 'Hono + tRPC v11', sub: 'API' },
-  { label: 'Drizzle + MySQL', sub: 'Database' },
-  { label: '100% TypeScript', sub: 'Type-safe' },
+const HERO_HOOKS = [
+  { label: 'Código Primero', sub: 'Diseñado para devs' },
+  { label: 'Auth Real',      sub: 'Google OAuth 2.0' },
+  { label: '1 Desarrollador', sub: 'Lo construí yo' },
+  { label: 'Funciona Ya',    sub: 'En producción' },
 ];
 
 export default function Hero({ onRegister, onLogin }: HeroProps) {
@@ -89,7 +89,7 @@ export default function Hero({ onRegister, onLogin }: HeroProps) {
             className="bg-[#e1ff00] text-[#050507] font-bold px-9 py-4 text-sm tracking-wide hover:bg-[#f3f2f2] active:scale-95 transition-all"
             style={{ borderRadius: '9999px', boxShadow: '0 0 24px rgba(225,255,0,0.3)' }}
           >
-            Empezar Gratis
+            Empezar
           </button>
           <button
             onClick={onLogin}
@@ -107,7 +107,7 @@ export default function Hero({ onRegister, onLogin }: HeroProps) {
         className="absolute bottom-0 left-0 right-0 z-10 border-t border-[#2A3347]/50 bg-[#050507]/85 backdrop-blur-sm opacity-0"
       >
         <div className="max-w-6xl mx-auto px-6 py-4 flex flex-wrap items-center justify-center gap-8 md:gap-16">
-          {TECH_STACK.map((t) => (
+          {HERO_HOOKS.map((t) => (
             <div key={t.label} className="text-center">
               <div className="text-[#e1ff00] font-mono font-bold text-sm">{t.label}</div>
               <div className="text-[#5A6680] text-[10px] font-mono tracking-wider uppercase">{t.sub}</div>
