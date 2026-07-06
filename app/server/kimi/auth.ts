@@ -107,8 +107,11 @@ export function createOAuthCallbackHandler() {
       return c.redirect("/#/app", 302);
     } catch (err) {
       const cause = err instanceof Error ? err.message : String(err);
+      const rootCause = err instanceof Error && err.cause instanceof Error
+        ? { message: err.cause.message, code: (err.cause as NodeJS.ErrnoException).code }
+        : null;
       console.error("[OAuth] Google callback failed:", cause, err);
-      return c.json({ error: "OAuth callback failed", cause }, 500);
+      return c.json({ error: "OAuth callback failed", cause, rootCause }, 500);
     }
   };
 }
