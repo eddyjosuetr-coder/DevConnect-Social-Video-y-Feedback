@@ -26,7 +26,7 @@ export function getDb() {
       password: url.password,
       database: dbName,
       port: parseInt(url.port, 10) || 3306,
-      ssl: needsSsl ? { rejectUnauthorized: true } : undefined,
+      ssl: needsSsl ? { rejectUnauthorized: false } : undefined,
     });
 
     instance = drizzle(pool, {
