@@ -24,8 +24,8 @@ export default function Hero({ onRegister, onLogin }: HeroProps) {
   useEffect(() => {
     const tl = gsap.timeline({ delay: 0.2 });
     tl.fromTo(logoRef.current,
-        { opacity: 0, scale: 0.8, filter: 'blur(16px)' },
-        { opacity: 1, scale: 1, filter: 'blur(0px)', duration: 1.2, ease: 'expo.out' })
+        { opacity: 0, scale: 0.85 },
+        { opacity: 1, scale: 1, duration: 1.2, ease: 'expo.out' })
       .fromTo(titleRef.current, { opacity: 0, y: 48 }, { opacity: 1, y: 0, duration: 1,   ease: 'expo.out' }, '-=0.5')
       .fromTo(subRef.current,   { opacity: 0, y: 24 }, { opacity: 1, y: 0, duration: 0.7, ease: 'expo.out' }, '-=0.6')
       .fromTo(ctaRef.current,   { opacity: 0, y: 16 }, { opacity: 1, y: 0, duration: 0.5, ease: 'expo.out' }, '-=0.4')
