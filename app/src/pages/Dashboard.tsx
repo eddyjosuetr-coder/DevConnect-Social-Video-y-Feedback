@@ -36,7 +36,7 @@ function loadSavedIds(): Set<number> {
 }
 
 export default function Dashboard() {
-  const { user, isLoading, isAuthenticated, logout } = useAuth({ redirectOnUnauthenticated: true, redirectPath: '/login' });
+  const { user, isLoading, isAuthenticated, logout } = useAuth({ redirectOnUnauthenticated: true, redirectPath: '/' });
   const { toasts, addToast, removeToast } = useToast();
 
   const [activeTab,    setActiveTab]    = useState<ActiveTab>('feed');
