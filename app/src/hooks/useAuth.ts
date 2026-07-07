@@ -9,7 +9,7 @@ type UseAuthOptions = {
 };
 
 export function useAuth(options?: UseAuthOptions) {
-  const { redirectOnUnauthenticated = false, redirectPath = LOGIN_PATH } =
+  const { redirectOnUnauthenticated = false, redirectPath = '/' } =
     options ?? {};
 
   const navigate = useNavigate();
