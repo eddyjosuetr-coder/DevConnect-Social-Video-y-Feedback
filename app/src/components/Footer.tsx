@@ -28,9 +28,9 @@ export default function Footer() {
               className="text-[#f3f2f2] font-black leading-[1.05] mb-8"
               style={{ fontSize: 'clamp(26px, 3.2vw, 48px)', letterSpacing: '-1.5px' }}
             >
-              Hecha en las noches<br />
-              por un solo dev.<br />
-              <span className="text-[#e1ff00]">Para todos los devs.</span>
+              De developer a developer.<br />
+              Construida desde cero,<br />
+              <span className="text-[#e1ff00]">para toda la comunidad.</span>
             </h2>
             <a
               href="https://github.com/eddyjosuetr-coder"

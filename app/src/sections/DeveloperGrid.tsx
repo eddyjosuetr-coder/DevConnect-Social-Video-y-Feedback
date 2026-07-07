@@ -64,12 +64,12 @@ export default function DeveloperGrid() {
               className="text-[#f3f2f2] font-black mb-8 leading-[1.05]"
               style={{ fontSize: 'clamp(30px, 4.5vw, 60px)', letterSpacing: '-2px' }}
             >
-              Ninguna red social<br />
-              entendía a los devs.<br />
-              <span className="text-[#e1ff00]">Así que construí la mía.</span>
+              Quería una red donde<br />
+              el código fuera el idioma.<br />
+              <span className="text-[#e1ff00]">La construí.</span>
             </h2>
             <p className="text-[#5A6680] text-base leading-relaxed max-w-lg mb-8">
-              DevConnect nació de una frustración real. Las redes existentes no fueron diseñadas para developers. No entienden código. No priorizan lo técnico. Entonces tomé la decisión y lo construí exactamente como quería usarlo.
+              DevConnect nació de una idea simple: los developers necesitamos un espacio donde compartir código sea natural, los proyectos personales tengan visibilidad real, y la comunidad hable el mismo idioma técnico. No lo encontré, así que lo construí.
             </p>
             <div className="flex items-center gap-3">
               <div className="w-8 h-px bg-[#e1ff00]" />
