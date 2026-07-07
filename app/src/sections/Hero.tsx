@@ -24,8 +24,8 @@ export default function Hero({ onRegister, onLogin }: HeroProps) {
   useEffect(() => {
     const tl = gsap.timeline({ delay: 0.2 });
     tl.fromTo(logoRef.current,
-        { opacity: 0, y: -8 },
-        { opacity: 1, y: 0, duration: 0.6, ease: 'expo.out' })
+        { opacity: 0, scale: 0.8, filter: 'blur(16px)' },
+        { opacity: 1, scale: 1, filter: 'blur(0px)', duration: 1.2, ease: 'expo.out' })
       .fromTo(titleRef.current, { opacity: 0, y: 48 }, { opacity: 1, y: 0, duration: 1,   ease: 'expo.out' }, '-=0.5')
       .fromTo(subRef.current,   { opacity: 0, y: 24 }, { opacity: 1, y: 0, duration: 0.7, ease: 'expo.out' }, '-=0.6')
       .fromTo(ctaRef.current,   { opacity: 0, y: 16 }, { opacity: 1, y: 0, duration: 0.5, ease: 'expo.out' }, '-=0.4')
@@ -58,12 +58,13 @@ export default function Hero({ onRegister, onLogin }: HeroProps) {
       <div className="relative z-10 text-center px-6 max-w-4xl mx-auto pt-24 pb-36">
         {/* Logo with name */}
         <div className="flex justify-center mb-8" ref={metaRef}>
-          <span
+          <img
             ref={logoRef}
-            className="font-mono text-xs tracking-[0.3em] text-[#e1ff00] uppercase opacity-0"
-          >
-            DevConnect
-          </span>
+            src="/images/logo-connombre.png"
+            alt="DevConnect"
+            className="w-[340px] max-w-[80vw] object-contain opacity-0"
+            style={{ filter: 'drop-shadow(0 0 32px rgba(225,255,0,0.55)) drop-shadow(0 0 64px rgba(225,255,0,0.2))' }}
+          />
         </div>
 
         <h1
