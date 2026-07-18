@@ -184,9 +184,20 @@ export default function PostCard({ post, addToast, isSaved = false, onToggleSave
           {post.mediaUrl && (() => {
             const urls = parseMediaUrls(post.mediaUrl);
             if (post.mediaType === 'video') {
+              if (urls.length === 1) {
+                return (
+                  <div className="mb-3 rounded-xl overflow-hidden border border-[#1E2535]">
+                    <video src={urls[0]} controls className="w-full block" style={{ maxHeight: '520px', background: '#060911' }} preload="metadata" />
+                  </div>
+                );
+              }
               return (
-                <div className="mb-3 rounded-xl overflow-hidden border border-[#1E2535]">
-                  <video src={urls[0]} controls className="w-full block" style={{ maxHeight: '520px', background: '#060911' }} preload="metadata" />
+                <div className={`mb-3 rounded-xl overflow-hidden border border-[#1E2535] grid gap-0.5 bg-[#1E2535] ${urls.length === 2 ? 'grid-cols-2' : 'grid-cols-2'}`}>
+                  {urls.map((url, i) => (
+                    <div key={i} className="relative overflow-hidden bg-[#040608]" style={{ aspectRatio: '16/9' }}>
+                      <video src={url} controls className="w-full h-full object-cover" preload="metadata" />
+                    </div>
+                  ))}
                 </div>
               );
             }

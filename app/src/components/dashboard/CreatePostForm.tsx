@@ -298,18 +298,22 @@ export default function CreatePostForm({ user, onClose, addToast }: CreatePostFo
     if (!hasVideo && !hasImage) { addToast('Solo se permiten imágenes o videos', 'error'); return; }
 
     if (hasVideo) {
-      if (incoming.length > 1) { addToast('Solo 1 video por post', 'error'); return; }
-      const file = incoming[0];
-      if (file.size > MAX_VIDEO_MB * 1024 * 1024) { addToast(`Video muy grande (máx ${MAX_VIDEO_MB}MB)`, 'error'); return; }
-      mediaPreviews.forEach(safeRevoke);
-      setMediaFiles([file]);
-      setMediaPreviews([URL.createObjectURL(file)]);
+      if (mediaType === 'image' && mediaPreviews.length > 0) { addToast('Elimina las imágenes antes de agregar videos', 'error'); return; }
+      const combined = [...mediaFiles, ...incoming];
+      if (combined.length > MAX_IMAGES) { addToast(`Máximo ${MAX_IMAGES} videos por post`, 'info'); }
+      const accepted = combined.slice(0, MAX_IMAGES);
+      const oversized = accepted.find((f) => f.size > MAX_VIDEO_MB * 1024 * 1024);
+      if (oversized) { addToast(`Video muy grande (máx ${MAX_VIDEO_MB}MB)`, 'error'); return; }
+      const newFiles = incoming.slice(0, MAX_IMAGES - mediaFiles.length);
+      const newPreviews = newFiles.map((f) => URL.createObjectURL(f));
+      setMediaFiles(accepted);
+      setMediaPreviews([...mediaPreviews, ...newPreviews].slice(0, MAX_IMAGES));
       setMediaType('video');
       return;
     }
 
     // Images — add to existing (if not already video), cap at MAX_IMAGES
-    if (mediaType === 'video') { addToast('Elimina el video antes de agregar imágenes', 'error'); return; }
+    if (mediaType === 'video') { addToast('Elimina los videos antes de agregar imágenes', 'error'); return; }
     const combined = [...mediaFiles, ...incoming];
     if (combined.length > MAX_IMAGES) {
       addToast(`Máximo ${MAX_IMAGES} imágenes por post`, 'info');
@@ -519,10 +523,20 @@ export default function CreatePostForm({ user, onClose, addToast }: CreatePostFo
               {/* Media / GIF preview */}
               {mediaPreviews.length > 0 && mediaType && (
                 <div className="dc-enter relative mb-3">
-                  {mediaType === 'video' ? (
+                  {mediaType === 'video' && mediaPreviews.length === 1 ? (
                     <div className="relative rounded-xl overflow-hidden border border-[#1E2535] bg-[#060911]">
                       <video src={mediaPreviews[0]} controls className="w-full max-h-72" />
-                      <RemoveBtn onClick={() => removeMedia()} />
+                      <RemoveBtn onClick={() => removeMedia(0)} />
+                    </div>
+                  ) : mediaType === 'video' ? (
+                    // Multiple videos grid
+                    <div className={`rounded-xl overflow-hidden border border-[#1E2535] bg-[#060911] grid gap-0.5 ${mediaPreviews.length === 2 ? 'grid-cols-2' : 'grid-cols-2'}`}>
+                      {mediaPreviews.map((preview, i) => (
+                        <div key={i} className="relative bg-[#040608] overflow-hidden" style={{ aspectRatio: '16/9' }}>
+                          <video src={preview} controls className="w-full h-full object-cover" />
+                          <RemoveBtn onClick={() => removeMedia(i)} />
+                        </div>
+                      ))}
                     </div>
                   ) : mediaPreviews.length === 1 ? (
                     <div className="relative rounded-xl overflow-hidden border border-[#1E2535] bg-[#060911]">
@@ -568,8 +582,8 @@ export default function CreatePostForm({ user, onClose, addToast }: CreatePostFo
                     onClick={() => fileInputRef.current?.click()}
                     active={mediaPreviews.length > 0 && mediaType !== null}
                     activeColor="#e1ff00"
-                    disabled={mediaType === 'video' && mediaPreviews.length > 0}
-                    title={canAddMore ? `Agregar imagen (${mediaPreviews.length}/${MAX_IMAGES})` : 'Imagen o video'}
+                    disabled={mediaPreviews.length >= MAX_IMAGES}
+                    title={mediaPreviews.length > 0 ? `${mediaPreviews.length}/${MAX_IMAGES} archivos` : 'Imagen o video'}
                     badge={mediaPreviews.length > 1 ? `${mediaPreviews.length}` : undefined}
                   >
                     {mediaType === 'video' ? <Film size={18} /> : <ImagePlus size={18} />}

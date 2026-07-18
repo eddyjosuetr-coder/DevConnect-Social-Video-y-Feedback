@@ -144,9 +144,20 @@ export default function SharedPostCard({
           {post.mediaUrl && (() => {
             const urls = parseMediaUrls(post.mediaUrl);
             if (post.mediaType === 'video') {
+              if (urls.length === 1) {
+                return (
+                  <div className="mt-3 rounded-lg overflow-hidden border border-[#1E2535]">
+                    <video src={urls[0]} controls className="w-full block" style={{ maxHeight: '240px', background: '#060911' }} preload="metadata" onClick={(e) => e.stopPropagation()} />
+                  </div>
+                );
+              }
               return (
-                <div className="mt-3 rounded-lg overflow-hidden border border-[#1E2535]">
-                  <video src={urls[0]} controls className="w-full block" style={{ maxHeight: '240px', background: '#060911' }} preload="metadata" onClick={(e) => e.stopPropagation()} />
+                <div className={`mt-3 rounded-lg overflow-hidden border border-[#1E2535] grid gap-0.5 bg-[#1E2535] grid-cols-2`}>
+                  {urls.map((url, i) => (
+                    <div key={i} className="overflow-hidden bg-[#040608]" style={{ aspectRatio: '16/9' }}>
+                      <video src={url} controls className="w-full h-full object-cover" preload="metadata" onClick={(e) => e.stopPropagation()} />
+                    </div>
+                  ))}
                 </div>
               );
             }
