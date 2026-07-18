@@ -153,19 +153,25 @@ export default function PostCard({ post, addToast, isSaved = false, onToggleSave
 
           {/* Media */}
           {post.mediaUrl && (
-            <div className="mb-4 rounded-xl overflow-hidden border border-[#1E2535]">
+            <div className="mb-3 rounded-xl overflow-hidden border border-[#1E2535]">
               {post.mediaType === 'video' ? (
                 <video
                   src={post.mediaUrl}
                   controls
-                  className="w-full max-h-96 bg-[#060911]"
+                  className="w-full block"
+                  style={{ maxHeight: '520px', background: '#060911' }}
                   preload="metadata"
                 />
               ) : (
                 <img
                   src={post.mediaUrl}
                   alt=""
-                  className="w-full max-h-96 object-contain bg-[#060911]"
+                  className="w-full block"
+                  style={{
+                    maxHeight: '520px',
+                    objectFit: 'cover',
+                    objectPosition: 'center top',
+                  }}
                   loading="lazy"
                 />
               )}
