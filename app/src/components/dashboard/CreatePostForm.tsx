@@ -103,28 +103,32 @@ function GifPicker({ onSelect, onClose }: { onSelect: (gif: GifItem) => void; on
   const [query, setQuery] = useState('');
   const [gifs, setGifs] = useState<GifItem[]>([]);
   const [loading, setLoading] = useState(false);
+  const [apiError, setApiError] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => {
     setLoading(true);
+    setApiError(false);
     fetchTrending()
-      .then(setGifs)
-      .catch(() => setGifs([]))
+      .then((result) => { setGifs(result); if (result.length === 0) setApiError(true); })
+      .catch(() => { setGifs([]); setApiError(true); })
       .finally(() => setLoading(false));
   }, []);
 
   useEffect(() => {
     if (debounceRef.current) clearTimeout(debounceRef.current);
     if (!query.trim()) {
-      fetchTrending().then(setGifs).catch(() => setGifs([]));
+      fetchTrending()
+        .then((result) => { setGifs(result); setApiError(result.length === 0); })
+        .catch(() => { setGifs([]); setApiError(true); });
       return;
     }
     debounceRef.current = setTimeout(() => {
       setLoading(true);
       searchGifs(query)
-        .then(setGifs)
-        .catch(() => setGifs([]))
+        .then((result) => { setGifs(result); setApiError(false); })
+        .catch(() => { setGifs([]); setApiError(true); })
         .finally(() => setLoading(false));
     }, 400);
     return () => { if (debounceRef.current) clearTimeout(debounceRef.current); };
@@ -141,7 +145,7 @@ function GifPicker({ onSelect, onClose }: { onSelect: (gif: GifItem) => void; on
   return (
     <div
       ref={ref}
-      className="absolute bottom-full mb-2 left-0 z-50 rounded-2xl border border-[#1E2535] shadow-2xl overflow-hidden dc-enter"
+      className="absolute top-full mt-2 left-0 z-50 rounded-2xl border border-[#1E2535] shadow-2xl overflow-hidden dc-enter"
       style={{ width: 340, background: '#0B0E17' }}
     >
       {/* Header */}
@@ -171,6 +175,17 @@ function GifPicker({ onSelect, onClose }: { onSelect: (gif: GifItem) => void; on
         {loading ? (
           <div className="h-full flex items-center justify-center">
             <Loader2 size={20} className="animate-spin text-[#e1ff00]" />
+          </div>
+        ) : apiError ? (
+          <div className="h-full flex flex-col items-center justify-center gap-3 px-6 text-center">
+            <span className="text-2xl">🔑</span>
+            <p className="text-[#8B9AB0] text-sm leading-relaxed">
+              Necesitas una API key de Giphy gratis.
+            </p>
+            <p className="text-[#5A6680] text-xs leading-relaxed">
+              Ve a <span className="text-[#e1ff00] font-mono">developers.giphy.com</span>, crea una app gratuita y agrega{' '}
+              <span className="text-[#e1ff00] font-mono">VITE_GIPHY_API_KEY</span> en Vercel → Settings → Environment Variables.
+            </p>
           </div>
         ) : gifs.length === 0 ? (
           <div className="h-full flex items-center justify-center text-[#3D4E68] text-sm">
@@ -213,7 +228,7 @@ function EmojiPanel({ onSelect, onClose }: { onSelect: (native: string) => void;
   }, [onClose]);
 
   return (
-    <div ref={ref} className="absolute bottom-full mb-2 left-0 z-50 dc-enter">
+    <div ref={ref} className="absolute top-full mt-2 left-0 z-50 dc-enter">
       <Picker
         data={data}
         onEmojiSelect={(emoji: { native: string }) => onSelect(emoji.native)}
