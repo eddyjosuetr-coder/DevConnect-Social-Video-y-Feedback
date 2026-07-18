@@ -1,12 +1,167 @@
-import { useState } from 'react';
+import { useState, useId } from 'react';
 import { useParams, useNavigate } from 'react-router';
-import { ArrowLeft, Calendar, Users, UserCheck, UserPlus, Verified, Grid3X3 } from 'lucide-react';
+import { ArrowLeft, Calendar, UserCheck, UserPlus, Verified, LayoutGrid } from 'lucide-react';
 import { trpc } from '@/providers/trpc';
 import { useAuth } from '@/hooks/useAuth';
 import { useToast } from '@/hooks/useToast';
 import PostCard from '@/components/dashboard/PostCard';
 import ToastContainer from '@/components/ToastContainer';
 
+// ── Color palette per user id ─────────────────────────────────────────────────
+const PALETTES: Array<[string, string]> = [
+  ['#e1ff00', '#00ffff'],
+  ['#3B82F6', '#8B5CF6'],
+  ['#F59E0B', '#F97316'],
+  ['#10B981', '#06B6D4'],
+  ['#EC4899', '#8B5CF6'],
+  ['#06B6D4', '#6366F1'],
+];
+function palette(id: number): [string, string] {
+  return PALETTES[id % PALETTES.length];
+}
+
+// ── DefaultBanner SVG ─────────────────────────────────────────────────────────
+function DefaultBanner({ userId, color }: { userId: number; color: string }) {
+  const uid = useId().replace(/:/g, '');
+  const pid = `p${uid}`;
+  const gid = `g${uid}`;
+  return (
+    <svg width="100%" height="100%" xmlns="http://www.w3.org/2000/svg" preserveAspectRatio="xMidYMid slice">
+      <defs>
+        <pattern id={pid} x="0" y="0" width="28" height="28" patternUnits="userSpaceOnUse">
+          <circle cx="14" cy="14" r="1" fill={color} opacity="0.2" />
+        </pattern>
+        <radialGradient id={gid} cx="70%" cy="30%" r="70%">
+          <stop offset="0%" stopColor={color} stopOpacity="0.2" />
+          <stop offset="100%" stopColor={color} stopOpacity="0" />
+        </radialGradient>
+      </defs>
+      <rect width="100%" height="100%" fill="#08101F" />
+      <rect width="100%" height="100%" fill={`url(#${pid})`} />
+      <rect width="100%" height="100%" fill={`url(#${gid})`} />
+      {/* Subtle horizontal scan lines */}
+      {[0.25, 0.5, 0.75].map((y, i) => (
+        <line
+          key={i}
+          x1="0" y1={`${y * 100}%`}
+          x2="100%" y2={`${y * 100}%`}
+          stroke={color} strokeOpacity="0.04" strokeWidth="1"
+        />
+      ))}
+    </svg>
+  );
+}
+
+// ── Avatar with animated conic ring ──────────────────────────────────────────
+function AvatarRing({
+  src, name, colors, size = 80,
+}: {
+  src: string | null;
+  name: string | null;
+  colors: [string, string];
+  size?: number;
+}) {
+  const [c1, c2] = colors;
+  return (
+    <div
+      style={{
+        padding: 3,
+        background: `conic-gradient(from 0deg, ${c1}, ${c2}, ${c1})`,
+        borderRadius: '50%',
+        boxShadow: `0 0 0 3px #060911, 0 0 22px ${c1}44`,
+        animation: 'ring-spin 10s linear infinite',
+        width: size + 12,
+        height: size + 12,
+        flexShrink: 0,
+      }}
+    >
+      <div style={{ padding: 3, background: '#060911', borderRadius: '50%' }}>
+        {src ? (
+          <img
+            src={src} alt=""
+            className="rounded-full object-cover block"
+            style={{ width: size, height: size }}
+          />
+        ) : (
+          <div
+            className="rounded-full flex items-center justify-center font-black text-[#050507]"
+            style={{
+              width: size, height: size,
+              fontSize: size * 0.36,
+              background: `linear-gradient(135deg, ${c1}, ${c2})`,
+            }}
+          >
+            {(name ?? 'D').charAt(0).toUpperCase()}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+// ── Follow / Unfollow button ──────────────────────────────────────────────────
+function FollowButton({
+  isFollowing, loading, onClick,
+}: {
+  isFollowing: boolean;
+  loading: boolean;
+  onClick: () => void;
+}) {
+  const [hov, setHov] = useState(false);
+
+  const base = 'flex items-center gap-1.5 px-4 py-1.5 rounded-full text-sm font-semibold transition-all duration-200 select-none';
+
+  if (isFollowing) {
+    return (
+      <button
+        onClick={onClick}
+        disabled={loading}
+        onMouseEnter={() => setHov(true)}
+        onMouseLeave={() => setHov(false)}
+        className={base}
+        style={{
+          border: `1.5px solid ${hov ? '#EF4444' : 'rgba(225,255,0,0.4)'}`,
+          color: hov ? '#EF4444' : '#e1ff00',
+          background: hov ? 'rgba(239,68,68,0.06)' : 'transparent',
+          minWidth: 120,
+        }}
+      >
+        {hov ? <UserPlus size={14} /> : <UserCheck size={14} />}
+        {hov ? 'Dejar de seguir' : 'Siguiendo'}
+      </button>
+    );
+  }
+
+  return (
+    <button
+      onClick={onClick}
+      disabled={loading}
+      className={base}
+      style={{
+        background: '#e1ff00',
+        color: '#050507',
+        boxShadow: '0 0 16px rgba(225,255,0,0.3)',
+        opacity: loading ? 0.7 : 1,
+        minWidth: 88,
+      }}
+    >
+      <UserPlus size={14} />
+      Seguir
+    </button>
+  );
+}
+
+// ── StatItem ──────────────────────────────────────────────────────────────────
+function StatItem({ value, label }: { value: number; label: string }) {
+  return (
+    <div className="flex items-baseline gap-1.5">
+      <span className="text-[#f3f2f2] font-bold text-base tabular-nums">{value.toLocaleString()}</span>
+      <span className="text-[#5A6680] text-xs font-mono">{label}</span>
+    </div>
+  );
+}
+
+// ── UserProfile ───────────────────────────────────────────────────────────────
 export default function UserProfile() {
   const { userId: userIdParam } = useParams<{ userId: string }>();
   const userId = Number(userIdParam);
@@ -15,17 +170,16 @@ export default function UserProfile() {
   const { toasts, addToast, removeToast } = useToast();
 
   const isOwnProfile = isAuthenticated && me?.id === userId;
+  const [c1, c2] = palette(userId);
 
   const { data: profile, isLoading: profileLoading } = trpc.users.getProfile.useQuery(
     { userId },
     { enabled: !!userId && !Number.isNaN(userId) }
   );
-
   const { data: userPosts, isLoading: postsLoading } = trpc.posts.listByUser.useQuery(
     { userId },
     { enabled: !!userId && !Number.isNaN(userId) }
   );
-
   const { data: isFollowingData, refetch: refetchIsFollowing } = trpc.follows.isFollowing.useQuery(
     { followingId: userId },
     { enabled: isAuthenticated && !isOwnProfile && !!userId }
@@ -33,35 +187,30 @@ export default function UserProfile() {
 
   const [followLoading, setFollowLoading] = useState(false);
   const [localFollowing, setLocalFollowing] = useState<boolean | null>(null);
-  const [localFollowerCount, setLocalFollowerCount] = useState<number | null>(null);
+  const [localDelta, setLocalDelta] = useState(0);
 
   const toggleFollow = trpc.follows.toggle.useMutation();
-
   const isFollowing = localFollowing ?? isFollowingData ?? false;
-  const followerCount = localFollowerCount ?? (profile?.followerCount ?? 0);
+  const followerCount = (profile?.followerCount ?? 0) + localDelta;
 
   function handleFollowClick() {
     if (!isAuthenticated) { navigate('/login'); return; }
     setFollowLoading(true);
-    const wasFollowing = isFollowing;
-    setLocalFollowing(!wasFollowing);
-    setLocalFollowerCount(wasFollowing ? followerCount - 1 : followerCount + 1);
+    const was = isFollowing;
+    setLocalFollowing(!was);
+    setLocalDelta((d) => was ? d - 1 : d + 1);
     toggleFollow.mutate(
       { followingId: userId },
       {
-        onSuccess: (result) => {
-          setLocalFollowing(result.following);
-          setLocalFollowerCount(
-            result.following
-              ? (profile?.followerCount ?? 0) + 1
-              : Math.max(0, (profile?.followerCount ?? 0) - 1)
-          );
-          addToast(result.following ? `Ahora sigues a ${profile?.name ?? 'este usuario'}` : 'Dejaste de seguir', 'success');
+        onSuccess: (res) => {
+          setLocalFollowing(res.following);
+          setLocalDelta(res.following ? 1 : 0);
+          addToast(res.following ? `Ahora sigues a ${profile?.name ?? 'este usuario'}` : 'Dejaste de seguir', res.following ? 'success' : 'info');
           void refetchIsFollowing();
         },
         onError: () => {
-          setLocalFollowing(wasFollowing);
-          setLocalFollowerCount(followerCount);
+          setLocalFollowing(was);
+          setLocalDelta((d) => was ? d + 1 : d - 1);
           addToast('Error al actualizar seguimiento', 'error');
         },
         onSettled: () => setFollowLoading(false),
@@ -70,17 +219,19 @@ export default function UserProfile() {
   }
 
   const handle = profile?.name?.toLowerCase().replace(/\s+/g, '') ?? 'user';
-
   const joinDate = profile?.createdAt
     ? new Date(profile.createdAt).toLocaleDateString('es', { year: 'numeric', month: 'long' })
     : null;
+  const postCount = userPosts?.length ?? 0;
 
+  // ── Loading ──
   if (profileLoading) {
     return (
       <div className="min-h-screen bg-[#060911] flex items-center justify-center">
-        <div className="flex flex-col items-center gap-4">
-          <div className="w-12 h-12 rounded-full border-2 border-[#e1ff00]/30 border-t-[#e1ff00] animate-spin" />
-          <span className="text-[#3D4E68] text-sm font-mono">Cargando perfil…</span>
+        <div className="flex flex-col items-center gap-3">
+          <div className="w-10 h-10 rounded-full border-2 border-t-transparent animate-spin"
+            style={{ borderColor: `${c1}33`, borderTopColor: c1 }} />
+          <span className="text-[#5A6680] text-xs font-mono tracking-widest">CARGANDO</span>
         </div>
       </div>
     );
@@ -88,168 +239,141 @@ export default function UserProfile() {
 
   if (!profile) {
     return (
-      <div className="min-h-screen bg-[#060911] flex items-center justify-center">
-        <div className="text-center">
-          <p className="text-[#f3f2f2] text-xl font-bold mb-2">Usuario no encontrado</p>
-          <button
-            onClick={() => navigate('/app')}
-            className="text-[#e1ff00] text-sm hover:underline"
-          >
-            Volver al inicio
-          </button>
-        </div>
+      <div className="min-h-screen bg-[#060911] flex flex-col items-center justify-center gap-3">
+        <p className="text-[#f3f2f2] font-bold text-lg">Usuario no encontrado</p>
+        <button onClick={() => navigate('/app')} className="text-xs font-mono" style={{ color: c1 }}>← Volver al inicio</button>
       </div>
     );
   }
 
   return (
-    <div className="min-h-screen bg-[#060911]">
+    <div className="min-h-screen bg-[#060911]" style={{ animation: 'pf-in 0.35s ease both' }}>
+      <style>{`
+        @keyframes ring-spin { to { transform: rotate(360deg); } }
+        @keyframes pf-in { from { opacity:0; transform:translateY(10px); } to { opacity:1; transform:translateY(0); } }
+      `}</style>
       <ToastContainer toasts={toasts} removeToast={removeToast} />
 
-      {/* Top nav bar */}
-      <div className="sticky top-0 z-20 bg-[#060911]/90 backdrop-blur-sm border-b border-[#1E2535] px-4 py-3 flex items-center gap-4">
+      {/* ── Global sticky header ── */}
+      <div
+        className="sticky top-0 z-30 border-b border-[#1E2535] px-4 py-2.5 flex items-center gap-3"
+        style={{ background: 'rgba(6,9,17,0.88)', backdropFilter: 'blur(12px)' }}
+      >
         <button
           onClick={() => navigate(-1)}
-          className="p-2 rounded-lg text-[#6B7FA8] hover:text-[#f3f2f2] hover:bg-[#1E2535] transition-all"
+          className="p-1.5 rounded-lg text-[#6B7FA8] hover:text-[#f3f2f2] hover:bg-[#1E2535] transition-all shrink-0"
         >
-          <ArrowLeft size={18} />
+          <ArrowLeft size={17} />
         </button>
-        <div>
-          <p className="text-[#f3f2f2] font-bold text-[15px] leading-tight">{profile.name ?? 'Developer'}</p>
-          <p className="text-[#3D4E68] text-xs font-mono">{userPosts?.length ?? 0} posts</p>
+        <div className="flex-1 min-w-0">
+          <p className="text-[#f3f2f2] font-bold text-sm leading-tight truncate">{profile.name ?? 'Developer'}</p>
+          <p className="text-[#3D4E68] text-[11px] font-mono">{postCount} {postCount === 1 ? 'post' : 'posts'}</p>
         </div>
+        {/* Small logo */}
+        <img src="/images/logo-solocara.png" alt="DevConnect"
+          className="w-7 h-7 object-contain opacity-60 shrink-0"
+          style={{ filter: 'drop-shadow(0 0 6px rgba(225,255,0,0.5))' }} />
       </div>
 
-      {/* Banner */}
-      <div className="relative">
-        {profile.banner ? (
-          <img
-            src={profile.banner}
-            alt=""
-            className="w-full object-cover"
-            style={{ height: '200px', objectPosition: 'center' }}
-          />
-        ) : (
-          <div
-            className="w-full"
-            style={{
-              height: '200px',
-              background: 'linear-gradient(135deg, #0B0E17 0%, #111827 40%, #0f1729 70%, #060911 100%)',
-            }}
-          >
-            <div
-              className="w-full h-full"
-              style={{
-                background: 'radial-gradient(ellipse 80% 60% at 60% 50%, rgba(225,255,0,0.06) 0%, transparent 70%)',
-              }}
-            />
-          </div>
-        )}
+      {/* ── Centered column ── */}
+      <div className="max-w-2xl mx-auto px-0 sm:px-4 pt-4 pb-12">
 
-        {/* Avatar */}
-        <div className="absolute -bottom-12 left-4">
-          {profile.avatar ? (
-            <img
-              src={profile.avatar}
-              alt=""
-              className="w-24 h-24 rounded-full object-cover ring-4 ring-[#060911]"
-            />
-          ) : (
-            <div className="w-24 h-24 rounded-full bg-gradient-to-br from-[#e1ff00] to-[#00ffff] flex items-center justify-center text-[#050507] font-bold text-3xl ring-4 ring-[#060911]">
-              {(profile.name ?? 'D').charAt(0)}
+        {/* ── Profile card ── */}
+        <div
+          className="relative rounded-none sm:rounded-2xl overflow-visible border-y sm:border border-[#1A2133]"
+          style={{ background: '#080D18' }}
+        >
+          {/* Banner — clipped within its own container */}
+          <div className="rounded-none sm:rounded-t-2xl overflow-hidden" style={{ height: 160 }}>
+            {profile.banner ? (
+              <img src={profile.banner} alt="" className="w-full h-full object-cover"
+                style={{ objectPosition: 'center' }} />
+            ) : (
+              <DefaultBanner userId={userId} color={c1} />
+            )}
+          </div>
+
+          {/* Card body */}
+          <div className="relative px-5 pb-5">
+            {/* Avatar — overlaps banner bottom by ~40px */}
+            <div className="absolute z-10" style={{ top: -46, left: 20 }}>
+              <AvatarRing src={profile.avatar} name={profile.name} colors={[c1, c2]} size={80} />
             </div>
-          )}
-        </div>
-      </div>
 
-      {/* Follow button row */}
-      <div className="flex justify-end px-4 pt-3 pb-1" style={{ minHeight: '52px' }}>
-        {!isOwnProfile && (
-          <button
-            onClick={handleFollowClick}
-            disabled={followLoading}
-            className={`flex items-center gap-2 px-5 py-2 rounded-full text-sm font-semibold transition-all ${
-              isFollowing
-                ? 'bg-transparent border border-[#3D4E68] text-[#f3f2f2] hover:border-[#EF4444] hover:text-[#EF4444]'
-                : 'bg-[#e1ff00] text-[#050507] hover:bg-[#d4f000]'
-            }`}
-          >
-            {isFollowing ? <UserCheck size={15} /> : <UserPlus size={15} />}
-            {isFollowing ? 'Siguiendo' : 'Seguir'}
-          </button>
-        )}
-        {isOwnProfile && (
-          <button
-            onClick={() => navigate('/app')}
-            className="px-5 py-2 rounded-full text-sm font-semibold border border-[#3D4E68] text-[#f3f2f2] hover:border-[#e1ff00]/50 transition-all"
-          >
-            Editar perfil
-          </button>
-        )}
-      </div>
+            {/* Action button row — right-aligned, vertically centered with avatar overlap */}
+            <div className="flex justify-end pt-3 mb-10">
+              {!isOwnProfile && (
+                <FollowButton isFollowing={isFollowing} loading={followLoading} onClick={handleFollowClick} />
+              )}
+              {isOwnProfile && (
+                <button
+                  onClick={() => navigate('/app')}
+                  className="px-4 py-1.5 rounded-full text-xs font-semibold border border-[#2A3347] text-[#C9D5E8] hover:border-[#e1ff00]/40 hover:text-[#f3f2f2] transition-all"
+                >
+                  Editar perfil
+                </button>
+              )}
+            </div>
 
-      {/* Profile info */}
-      <div className="px-4 mt-10">
-        <div className="flex items-center gap-2 flex-wrap">
-          <h1 className="text-[#f3f2f2] font-bold text-xl">{profile.name ?? 'Developer'}</h1>
-          <Verified size={16} className="text-[#3B82F6] shrink-0" />
-        </div>
-        <p className="text-[#3D4E68] font-mono text-sm mt-0.5">@{handle}</p>
+            {/* Identity block */}
+            <div className="space-y-1">
+              <div className="flex items-center gap-2">
+                <h1 className="text-[#f3f2f2] font-bold text-[18px] leading-tight">{profile.name ?? 'Developer'}</h1>
+                <Verified size={16} className="text-[#3B82F6] shrink-0" />
+              </div>
+              <p className="text-[#5A6680] text-xs font-mono">@{handle}</p>
+            </div>
 
-        {profile.bio && (
-          <p className="text-[#C9D5E8] text-[15px] leading-relaxed mt-3 max-w-lg">{profile.bio}</p>
-        )}
+            {profile.bio && (
+              <p className="mt-3 text-[#A8BCCF] text-sm leading-relaxed max-w-md">{profile.bio}</p>
+            )}
 
-        {joinDate && (
-          <div className="flex items-center gap-1.5 mt-3 text-[#3D4E68] text-sm">
-            <Calendar size={14} />
-            <span>Se unió en {joinDate}</span>
+            <div className="mt-3 flex items-center flex-wrap gap-x-4 gap-y-1.5">
+              {joinDate && (
+                <div className="flex items-center gap-1 text-[#5A6680] text-xs font-mono">
+                  <Calendar size={12} />
+                  <span>Unido en {joinDate}</span>
+                </div>
+              )}
+            </div>
+
+            {/* Stats row */}
+            <div className="mt-4 flex items-center gap-5">
+              <StatItem value={profile.followingCount} label="Siguiendo" />
+              <span className="text-[#1E2535]">·</span>
+              <StatItem value={followerCount} label="Seguidores" />
+            </div>
           </div>
-        )}
-
-        {/* Stats */}
-        <div className="flex items-center gap-6 mt-4">
-          <button
-            className="flex items-center gap-1.5 text-sm hover:underline cursor-pointer"
-          >
-            <span className="text-[#f3f2f2] font-bold">{profile.followingCount}</span>
-            <span className="text-[#3D4E68]">Siguiendo</span>
-          </button>
-          <button
-            className="flex items-center gap-1.5 text-sm hover:underline cursor-pointer"
-          >
-            <span className="text-[#f3f2f2] font-bold">{followerCount}</span>
-            <span className="text-[#3D4E68]">Seguidores</span>
-          </button>
         </div>
-      </div>
 
-      {/* Posts tab header */}
-      <div className="mt-6 border-b border-[#1E2535] px-4">
-        <div className="flex items-center gap-2 pb-3 border-b-2 border-[#e1ff00] w-fit">
-          <Grid3X3 size={14} className="text-[#e1ff00]" />
-          <span className="text-[#f3f2f2] text-sm font-semibold">Posts</span>
+        {/* ── Posts tab ── */}
+        <div className="mt-1 border-b border-[#1A2133] flex">
+          <div
+            className="flex items-center gap-2 px-5 py-3 border-b-2 text-sm font-semibold cursor-default"
+            style={{ borderColor: c1, color: '#f3f2f2' }}
+          >
+            <LayoutGrid size={13} style={{ color: c1 }} />
+            Posts
+          </div>
         </div>
-      </div>
 
-      {/* Posts */}
-      <div>
+        {/* ── Feed ── */}
         {postsLoading ? (
-          <div className="flex justify-center py-12">
-            <div className="w-8 h-8 rounded-full border-2 border-[#e1ff00]/30 border-t-[#e1ff00] animate-spin" />
+          <div className="flex justify-center py-14">
+            <div className="w-7 h-7 rounded-full border-2 border-t-transparent animate-spin"
+              style={{ borderColor: `${c1}33`, borderTopColor: c1 }} />
           </div>
         ) : !userPosts || userPosts.length === 0 ? (
-          <div className="text-center py-16 text-[#3D4E68]">
-            <Users size={36} className="mx-auto mb-3 opacity-30" />
-            <p className="text-sm">Aún no hay posts</p>
+          <div className="flex flex-col items-center justify-center py-16 gap-3">
+            <div className="w-12 h-12 rounded-xl flex items-center justify-center"
+              style={{ background: `${c1}10`, border: `1px solid ${c1}18` }}>
+              <LayoutGrid size={22} style={{ color: c1, opacity: 0.5 }} />
+            </div>
+            <p className="text-[#5A6680] text-xs font-mono">Sin posts todavía</p>
           </div>
         ) : (
           userPosts.map((post) => (
-            <PostCard
-              key={post.id}
-              post={post}
-              addToast={addToast}
-            />
+            <PostCard key={post.id} post={post} addToast={addToast} />
           ))
         )}
       </div>
