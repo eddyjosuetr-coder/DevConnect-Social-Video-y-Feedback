@@ -16,6 +16,11 @@ const CODE_LANGUAGES = [
 const MAX_IMAGE_MB = 10;
 const MAX_VIDEO_MB = 100;
 const MAX_CHARS = 2000;
+const MAX_IMAGES = 4;
+
+function safeRevoke(url: string) {
+  if (url.startsWith('blob:')) URL.revokeObjectURL(url);
+}
 
 /* ---------- CharRing ---------- */
 function CharRing({ count, max }: { count: number; max: number }) {
@@ -242,6 +247,19 @@ function EmojiPanel({ onSelect, onClose }: { onSelect: (native: string) => void;
   );
 }
 
+/* ---------- RemoveBtn ---------- */
+function RemoveBtn({ onClick }: { onClick: () => void }) {
+  return (
+    <button
+      onClick={onClick}
+      className="absolute top-2 right-2 w-7 h-7 rounded-full flex items-center justify-center text-white hover:scale-110 active:scale-95 transition-transform border border-white/10 z-10"
+      style={{ background: 'rgba(0,0,0,0.75)', backdropFilter: 'blur(6px)' }}
+    >
+      <X size={13} />
+    </button>
+  );
+}
+
 /* ---------- Main Component ---------- */
 interface CreatePostFormProps {
   user: User;
@@ -250,17 +268,17 @@ interface CreatePostFormProps {
 }
 
 export default function CreatePostForm({ user, onClose, addToast }: CreatePostFormProps) {
-  const [content,      setContent]      = useState('');
-  const [code,         setCode]         = useState('');
-  const [lang,         setLang]         = useState('typescript');
-  const [showCode,     setShowCode]     = useState(false);
-  const [mediaFile,    setMediaFile]    = useState<File | null>(null);
-  const [mediaPreview, setMediaPreview] = useState<string | null>(null);
-  const [mediaType,    setMediaType]    = useState<'image' | 'video' | null>(null);
-  const [uploading,    setUploading]    = useState(false);
-  const [focused,      setFocused]      = useState(false);
-  const [showEmoji,    setShowEmoji]    = useState(false);
-  const [showGifs,     setShowGifs]     = useState(false);
+  const [content,       setContent]       = useState('');
+  const [code,          setCode]          = useState('');
+  const [lang,          setLang]          = useState('typescript');
+  const [showCode,      setShowCode]      = useState(false);
+  const [mediaFiles,    setMediaFiles]    = useState<File[]>([]);
+  const [mediaPreviews, setMediaPreviews] = useState<string[]>([]);
+  const [mediaType,     setMediaType]     = useState<'image' | 'video' | null>(null);
+  const [uploading,     setUploading]     = useState(false);
+  const [focused,       setFocused]       = useState(false);
+  const [showEmoji,     setShowEmoji]     = useState(false);
+  const [showGifs,      setShowGifs]      = useState(false);
 
   const fileInputRef = useRef<HTMLInputElement>(null);
   const textareaRef  = useRef<HTMLTextAreaElement>(null);
@@ -269,28 +287,57 @@ export default function CreatePostForm({ user, onClose, addToast }: CreatePostFo
   const createPost = trpc.posts.create.useMutation();
 
   const handleFileSelect = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
-
-    const isVideo = file.type.startsWith('video/');
-    const isImage = file.type.startsWith('image/');
-    if (!isVideo && !isImage) { addToast('Solo se permiten imágenes o videos', 'error'); return; }
-
-    const maxMB = isVideo ? MAX_VIDEO_MB : MAX_IMAGE_MB;
-    if (file.size > maxMB * 1024 * 1024) { addToast(`Archivo muy grande (máx ${maxMB}MB)`, 'error'); return; }
-
-    const preview = URL.createObjectURL(file);
-    setMediaFile(file);
-    setMediaPreview(preview);
-    setMediaType(isVideo ? 'video' : 'image');
+    const incoming = Array.from(e.target.files ?? []);
+    if (incoming.length === 0) return;
     e.target.value = '';
-  }, [addToast]);
 
-  const removeMedia = () => {
-    if (mediaPreview) URL.revokeObjectURL(mediaPreview);
-    setMediaFile(null);
-    setMediaPreview(null);
-    setMediaType(null);
+    const hasVideo = incoming.some((f) => f.type.startsWith('video/'));
+    const hasImage = incoming.some((f) => f.type.startsWith('image/'));
+
+    if (hasVideo && hasImage) { addToast('No puedes mezclar videos e imágenes', 'error'); return; }
+    if (!hasVideo && !hasImage) { addToast('Solo se permiten imágenes o videos', 'error'); return; }
+
+    if (hasVideo) {
+      if (incoming.length > 1) { addToast('Solo 1 video por post', 'error'); return; }
+      const file = incoming[0];
+      if (file.size > MAX_VIDEO_MB * 1024 * 1024) { addToast(`Video muy grande (máx ${MAX_VIDEO_MB}MB)`, 'error'); return; }
+      mediaPreviews.forEach(safeRevoke);
+      setMediaFiles([file]);
+      setMediaPreviews([URL.createObjectURL(file)]);
+      setMediaType('video');
+      return;
+    }
+
+    // Images — add to existing (if not already video), cap at MAX_IMAGES
+    if (mediaType === 'video') { addToast('Elimina el video antes de agregar imágenes', 'error'); return; }
+    const combined = [...mediaFiles, ...incoming];
+    if (combined.length > MAX_IMAGES) {
+      addToast(`Máximo ${MAX_IMAGES} imágenes por post`, 'info');
+    }
+    const accepted = combined.slice(0, MAX_IMAGES);
+    const oversized = accepted.find((f) => f.size > MAX_IMAGE_MB * 1024 * 1024);
+    if (oversized) { addToast(`Imagen muy grande (máx ${MAX_IMAGE_MB}MB)`, 'error'); return; }
+    const newFiles = incoming.slice(0, MAX_IMAGES - mediaFiles.length);
+    const newPreviews = newFiles.map((f) => URL.createObjectURL(f));
+    setMediaFiles(accepted);
+    setMediaPreviews([...mediaPreviews, ...newPreviews].slice(0, MAX_IMAGES));
+    setMediaType('image');
+  }, [addToast, mediaFiles, mediaPreviews, mediaType]);
+
+  const removeMedia = (index?: number) => {
+    if (index !== undefined) {
+      safeRevoke(mediaPreviews[index]);
+      const newFiles = mediaFiles.filter((_, i) => i !== index);
+      const newPreviews = mediaPreviews.filter((_, i) => i !== index);
+      setMediaFiles(newFiles);
+      setMediaPreviews(newPreviews);
+      if (newFiles.length === 0) setMediaType(null);
+    } else {
+      mediaPreviews.forEach(safeRevoke);
+      setMediaFiles([]);
+      setMediaPreviews([]);
+      setMediaType(null);
+    }
   };
 
   function insertEmoji(native: string) {
@@ -307,9 +354,9 @@ export default function CreatePostForm({ user, onClose, addToast }: CreatePostFo
   }
 
   function selectGif(gif: GifItem) {
-    if (mediaPreview) URL.revokeObjectURL(mediaPreview);
-    setMediaFile(null);
-    setMediaPreview(gif.url);
+    mediaPreviews.forEach(safeRevoke);
+    setMediaFiles([]);
+    setMediaPreviews([gif.url]);
     setMediaType('image');
     setShowGifs(false);
   }
@@ -320,21 +367,23 @@ export default function CreatePostForm({ user, onClose, addToast }: CreatePostFo
     let uploadedUrl: string | undefined;
     let uploadedType: 'image' | 'video' | undefined;
 
-    if (mediaFile) {
+    if (mediaFiles.length > 0) {
       if (!cloudinaryConfigured()) { addToast('Cloudinary no configurado — contacta al admin', 'error'); return; }
       try {
         setUploading(true);
-        const result = await uploadMedia(mediaFile);
-        uploadedUrl  = result.url;
-        uploadedType = result.type;
+        const results = await Promise.all(mediaFiles.map((f) => uploadMedia(f)));
+        uploadedType = results[0].type;
+        uploadedUrl = results.length === 1
+          ? results[0].url
+          : JSON.stringify(results.map((r) => r.url));
       } catch (err) {
         addToast(err instanceof Error ? err.message : 'Error al subir archivo', 'error');
         setUploading(false);
         return;
       } finally { setUploading(false); }
-    } else if (mediaPreview && mediaType === 'image' && !mediaFile) {
-      // GIF — use the URL directly (no upload needed)
-      uploadedUrl  = mediaPreview;
+    } else if (mediaPreviews.length > 0 && mediaType === 'image' && mediaFiles.length === 0) {
+      // GIF — use the URL directly
+      uploadedUrl  = mediaPreviews[0];
       uploadedType = 'image';
     }
 
@@ -351,7 +400,7 @@ export default function CreatePostForm({ user, onClose, addToast }: CreatePostFo
             };
             return old ? [newPost, ...old] : [newPost];
           });
-          if (mediaFile && mediaPreview) URL.revokeObjectURL(mediaPreview);
+          mediaPreviews.forEach(safeRevoke);
           addToast('Post publicado!', 'success');
           onClose();
         },
@@ -362,6 +411,7 @@ export default function CreatePostForm({ user, onClose, addToast }: CreatePostFo
 
   const isPending = uploading || createPost.isPending;
   const canPost = content.trim().length > 0 && !isPending;
+  const canAddMore = mediaType === 'image' && mediaPreviews.length < MAX_IMAGES;
 
   return (
     <>
@@ -467,25 +517,40 @@ export default function CreatePostForm({ user, onClose, addToast }: CreatePostFo
               )}
 
               {/* Media / GIF preview */}
-              {mediaPreview && mediaType && (
-                <div className="dc-enter relative mb-3 rounded-xl overflow-hidden border border-[#1E2535] bg-[#060911]">
+              {mediaPreviews.length > 0 && mediaType && (
+                <div className="dc-enter relative mb-3">
                   {mediaType === 'video' ? (
-                    <video src={mediaPreview} controls className="w-full max-h-72" />
+                    <div className="relative rounded-xl overflow-hidden border border-[#1E2535] bg-[#060911]">
+                      <video src={mediaPreviews[0]} controls className="w-full max-h-72" />
+                      <RemoveBtn onClick={() => removeMedia()} />
+                    </div>
+                  ) : mediaPreviews.length === 1 ? (
+                    <div className="relative rounded-xl overflow-hidden border border-[#1E2535] bg-[#060911]">
+                      <img src={mediaPreviews[0]} alt="" className="w-full max-h-72 object-contain" />
+                      <RemoveBtn onClick={() => removeMedia(0)} />
+                    </div>
                   ) : (
-                    <img src={mediaPreview} alt="" className="w-full max-h-72 object-contain" />
+                    // Multi-image grid
+                    <div className={`rounded-xl overflow-hidden border border-[#1E2535] bg-[#060911] grid gap-0.5 ${mediaPreviews.length === 2 ? 'grid-cols-2' : mediaPreviews.length === 3 ? 'grid-cols-3' : 'grid-cols-2'}`}>
+                      {mediaPreviews.map((preview, i) => (
+                        <div
+                          key={i}
+                          className={`relative bg-[#040608] overflow-hidden ${mediaPreviews.length === 3 && i === 0 ? 'row-span-2 col-span-1' : ''}`}
+                          style={{ aspectRatio: mediaPreviews.length === 4 ? '1' : mediaPreviews.length === 2 ? '4/3' : i === 0 ? '1' : '1' }}
+                        >
+                          <img src={preview} alt="" className="w-full h-full object-cover" />
+                          <RemoveBtn onClick={() => removeMedia(i)} />
+                        </div>
+                      ))}
+                    </div>
                   )}
-                  <button
-                    onClick={removeMedia}
-                    className="absolute top-2 right-2 w-7 h-7 rounded-full flex items-center justify-center text-white hover:scale-110 active:scale-95 transition-transform border border-white/10"
-                    style={{ background: 'rgba(0,0,0,0.75)', backdropFilter: 'blur(6px)' }}
-                  >
-                    <X size={13} />
-                  </button>
                   {uploading && (
-                    <div className="absolute inset-0 flex flex-col items-center justify-center gap-2"
+                    <div className="absolute inset-0 rounded-xl flex flex-col items-center justify-center gap-2"
                       style={{ background: 'rgba(6,9,17,0.82)', backdropFilter: 'blur(6px)' }}>
                       <Loader2 size={26} className="animate-spin text-[#e1ff00]" />
-                      <span className="text-[#e1ff00] text-xs font-mono tracking-widest uppercase">Subiendo</span>
+                      <span className="text-[#e1ff00] text-xs font-mono tracking-widest uppercase">
+                        {mediaFiles.length > 1 ? `Subiendo ${mediaFiles.length} archivos...` : 'Subiendo...'}
+                      </span>
                     </div>
                   )}
                 </div>
@@ -499,7 +564,14 @@ export default function CreatePostForm({ user, onClose, addToast }: CreatePostFo
                   <ToolBtn onClick={() => setShowCode(!showCode)} active={showCode} activeColor="#3B82F6" title="Agregar código">
                     <Code2 size={18} />
                   </ToolBtn>
-                  <ToolBtn onClick={() => fileInputRef.current?.click()} active={!!mediaFile} activeColor="#e1ff00" disabled={!!mediaFile} title="Imagen o video">
+                  <ToolBtn
+                    onClick={() => fileInputRef.current?.click()}
+                    active={mediaPreviews.length > 0 && mediaType !== null}
+                    activeColor="#e1ff00"
+                    disabled={mediaType === 'video' && mediaPreviews.length > 0}
+                    title={canAddMore ? `Agregar imagen (${mediaPreviews.length}/${MAX_IMAGES})` : 'Imagen o video'}
+                    badge={mediaPreviews.length > 1 ? `${mediaPreviews.length}` : undefined}
+                  >
                     {mediaType === 'video' ? <Film size={18} /> : <ImagePlus size={18} />}
                   </ToolBtn>
                   <ToolBtn onClick={() => { setShowGifs(false); setShowEmoji(!showEmoji); }} active={showEmoji} activeColor="#F59E0B" title="Emoji">
@@ -518,7 +590,14 @@ export default function CreatePostForm({ user, onClose, addToast }: CreatePostFo
                   <GifPicker onSelect={selectGif} onClose={() => setShowGifs(false)} />
                 )}
 
-                <input ref={fileInputRef} type="file" accept="image/*,video/*" className="hidden" onChange={handleFileSelect} />
+                <input
+                  ref={fileInputRef}
+                  type="file"
+                  accept="image/*,video/*"
+                  multiple
+                  className="hidden"
+                  onChange={handleFileSelect}
+                />
 
                 {/* Right controls */}
                 <div className="flex items-center gap-3">

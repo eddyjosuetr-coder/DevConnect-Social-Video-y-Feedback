@@ -15,6 +15,14 @@ interface PostCardProps {
   onToggleSave?: () => void;
 }
 
+function parseMediaUrls(mediaUrl: string | null): string[] {
+  if (!mediaUrl) return [];
+  if (mediaUrl.startsWith('[')) {
+    try { return JSON.parse(mediaUrl) as string[]; } catch { /* fall through */ }
+  }
+  return [mediaUrl];
+}
+
 const LANG_COLORS: Record<string, string> = {
   typescript: '#3178C6', javascript: '#F7DF1E', python: '#3776AB',
   rust: '#CE422B', go: '#00ADD8', java: '#ED8B00', css: '#264DE4',
@@ -173,31 +181,38 @@ export default function PostCard({ post, addToast, isSaved = false, onToggleSave
           )}
 
           {/* Media */}
-          {post.mediaUrl && (
-            <div className="mb-3 rounded-xl overflow-hidden border border-[#1E2535]">
-              {post.mediaType === 'video' ? (
-                <video
-                  src={post.mediaUrl}
-                  controls
-                  className="w-full block"
-                  style={{ maxHeight: '520px', background: '#060911' }}
-                  preload="metadata"
-                />
-              ) : (
-                <img
-                  src={post.mediaUrl}
-                  alt=""
-                  className="w-full block"
-                  style={{
-                    maxHeight: '520px',
-                    objectFit: 'cover',
-                    objectPosition: 'center top',
-                  }}
-                  loading="lazy"
-                />
-              )}
-            </div>
-          )}
+          {post.mediaUrl && (() => {
+            const urls = parseMediaUrls(post.mediaUrl);
+            if (post.mediaType === 'video') {
+              return (
+                <div className="mb-3 rounded-xl overflow-hidden border border-[#1E2535]">
+                  <video src={urls[0]} controls className="w-full block" style={{ maxHeight: '520px', background: '#060911' }} preload="metadata" />
+                </div>
+              );
+            }
+            if (urls.length === 1) {
+              return (
+                <div className="mb-3 rounded-xl overflow-hidden border border-[#1E2535]">
+                  <img src={urls[0]} alt="" className="w-full block" style={{ maxHeight: '520px', objectFit: 'cover', objectPosition: 'center top' }} loading="lazy" />
+                </div>
+              );
+            }
+            // Multi-image grid
+            const gridClass = urls.length === 2 ? 'grid-cols-2' : urls.length === 3 ? 'grid-cols-2' : 'grid-cols-2';
+            return (
+              <div className={`mb-3 rounded-xl overflow-hidden border border-[#1E2535] grid gap-0.5 bg-[#1E2535] ${gridClass}`}>
+                {urls.map((url, i) => (
+                  <div
+                    key={i}
+                    className={`relative overflow-hidden bg-[#040608] ${urls.length === 3 && i === 0 ? 'row-span-2' : ''}`}
+                    style={{ aspectRatio: urls.length === 4 ? '1' : urls.length === 2 ? '4/3' : i === 0 && urls.length === 3 ? '9/16' : '1' }}
+                  >
+                    <img src={url} alt="" className="w-full h-full object-cover" loading="lazy" />
+                  </div>
+                ))}
+              </div>
+            );
+          })()}
 
           {/* Tags */}
           {post.tags && (

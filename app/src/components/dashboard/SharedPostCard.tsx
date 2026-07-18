@@ -5,6 +5,14 @@ import { formatDate } from '@/lib/utils';
 import type { Post } from './types';
 import type { Toast } from '@/hooks/useToast';
 
+function parseMediaUrls(mediaUrl: string | null): string[] {
+  if (!mediaUrl) return [];
+  if (mediaUrl.startsWith('[')) {
+    try { return JSON.parse(mediaUrl) as string[]; } catch { /* fall through */ }
+  }
+  return [mediaUrl];
+}
+
 const LANG_COLORS: Record<string, string> = {
   typescript: '#3178C6', javascript: '#F7DF1E', python: '#3776AB',
   rust: '#CE422B', go: '#00ADD8', java: '#ED8B00', css: '#264DE4',
@@ -133,27 +141,32 @@ export default function SharedPostCard({
           )}
 
           {/* Media */}
-          {post.mediaUrl && (
-            <div className="mt-3 rounded-lg overflow-hidden border border-[#1E2535]">
-              {post.mediaType === 'video' ? (
-                <video
-                  src={post.mediaUrl}
-                  controls
-                  className="w-full block"
-                  style={{ maxHeight: '240px', background: '#060911' }}
-                  preload="metadata"
-                  onClick={(e) => e.stopPropagation()}
-                />
-              ) : (
-                <img
-                  src={post.mediaUrl}
-                  alt=""
-                  className="w-full block"
-                  style={{ maxHeight: '240px', objectFit: 'cover', objectPosition: 'center top' }}
-                />
-              )}
-            </div>
-          )}
+          {post.mediaUrl && (() => {
+            const urls = parseMediaUrls(post.mediaUrl);
+            if (post.mediaType === 'video') {
+              return (
+                <div className="mt-3 rounded-lg overflow-hidden border border-[#1E2535]">
+                  <video src={urls[0]} controls className="w-full block" style={{ maxHeight: '240px', background: '#060911' }} preload="metadata" onClick={(e) => e.stopPropagation()} />
+                </div>
+              );
+            }
+            if (urls.length === 1) {
+              return (
+                <div className="mt-3 rounded-lg overflow-hidden border border-[#1E2535]">
+                  <img src={urls[0]} alt="" className="w-full block" style={{ maxHeight: '240px', objectFit: 'cover', objectPosition: 'center top' }} />
+                </div>
+              );
+            }
+            return (
+              <div className={`mt-3 rounded-lg overflow-hidden border border-[#1E2535] grid gap-0.5 bg-[#1E2535] ${urls.length === 2 ? 'grid-cols-2' : 'grid-cols-2'}`}>
+                {urls.map((url, i) => (
+                  <div key={i} className="relative overflow-hidden bg-[#040608]" style={{ aspectRatio: '1' }}>
+                    <img src={url} alt="" className="w-full h-full object-cover" loading="lazy" onClick={(e) => e.stopPropagation()} />
+                  </div>
+                ))}
+              </div>
+            );
+          })()}
 
           {/* Tags */}
           {post.tags && (

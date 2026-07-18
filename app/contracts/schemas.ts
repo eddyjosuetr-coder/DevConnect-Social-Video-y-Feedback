@@ -5,7 +5,7 @@ export const createPostSchema = z.object({
   code: z.string().max(5000).optional(),
   codeLanguage: z.string().max(50).optional(),
   tags: z.string().max(500).optional(),
-  mediaUrl: z.string().url().optional(),
+  mediaUrl: z.string().max(50000).optional(),
   mediaType: z.enum(['image', 'video']).optional(),
 });
 
