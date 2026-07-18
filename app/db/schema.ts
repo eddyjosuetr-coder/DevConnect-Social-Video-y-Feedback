@@ -36,6 +36,8 @@ export const posts = mysqlTable("posts", {
   code: text("code"),
   codeLanguage: varchar("codeLanguage", { length: 50 }),
   tags: varchar("tags", { length: 500 }),
+  mediaUrl: text("mediaUrl"),
+  mediaType: varchar("mediaType", { length: 10 }),
   likesCount: int("likesCount").default(0).notNull(),
   commentsCount: int("commentsCount").default(0).notNull(),
   repostsCount: int("repostsCount").default(0).notNull(),

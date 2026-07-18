@@ -37,17 +37,18 @@ export function getDb() {
     });
 
     migrationReady = (async () => {
-      try {
-        await pool.execute("ALTER TABLE users ADD COLUMN banner MEDIUMTEXT");
-      } catch (e: unknown) {
-        // 1060 = column already exists — upgrade type in case it was added as TEXT
-        if ((e as { errno?: number }).errno === 1060) {
-          await pool.execute("ALTER TABLE users MODIFY COLUMN banner MEDIUMTEXT").catch(() => {});
+      const run = async (sql: string) => {
+        try { await pool.execute(sql); }
+        catch (e: unknown) {
+          const errno = (e as { errno?: number }).errno;
+          if (errno !== 1060 && errno !== 1061) console.warn("[migrate]", (e as Error).message);
         }
-      }
-      try {
-        await pool.execute("ALTER TABLE users MODIFY COLUMN avatar MEDIUMTEXT");
-      } catch {}
+      };
+      await run("ALTER TABLE users ADD COLUMN banner MEDIUMTEXT");
+      await run("ALTER TABLE users MODIFY COLUMN banner MEDIUMTEXT");
+      await run("ALTER TABLE users MODIFY COLUMN avatar MEDIUMTEXT");
+      await run("ALTER TABLE posts ADD COLUMN mediaUrl TEXT");
+      await run("ALTER TABLE posts ADD COLUMN mediaType VARCHAR(10)");
     })();
   }
   return instance;

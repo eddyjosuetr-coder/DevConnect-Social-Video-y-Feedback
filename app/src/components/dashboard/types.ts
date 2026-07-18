@@ -6,6 +6,8 @@ export type Post = {
   code: string | null;
   codeLanguage: string | null;
   tags: string | null;
+  mediaUrl: string | null;
+  mediaType: string | null;
   likesCount: number;
   commentsCount: number;
   repostsCount: number;

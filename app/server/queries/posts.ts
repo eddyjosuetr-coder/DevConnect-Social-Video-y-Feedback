@@ -8,6 +8,8 @@ export type PostRow = {
   code: string | null;
   codeLanguage: string | null;
   tags: string | null;
+  mediaUrl: string | null;
+  mediaType: string | null;
   likesCount: number;
   commentsCount: number;
   repostsCount: number;
@@ -27,6 +29,7 @@ export const mockPosts: StoredPost[] = [
     id: 1, userId: 2,
     content: "Acabo de deployar mi primer proyecto con tRPC + React 19. La type-safety end-to-end es un game changer 🚀",
     code: null, codeLanguage: null, tags: "trpc,react,typescript",
+    mediaUrl: null, mediaType: null,
     likesCount: 5, commentsCount: 1, repostsCount: 3,
     createdAt: new Date(Date.now() - 2 * 3600000),
     authorId: 2, authorName: "Alejandro Marin", authorAvatar: null,
@@ -36,6 +39,7 @@ export const mockPosts: StoredPost[] = [
     content: "Patron que uso para manejar errores en TypeScript sin excepciones:",
     code: `type Result<T, E = Error> = { ok: true; value: T } | { ok: false; error: E };\n\nasync function fetchUser(id: string): Promise<Result<User>> {\n  const res = await fetch(\`/api/users/\${id}\`);\n  if (!res.ok) return { ok: false, error: new Error('Not found') };\n  return { ok: true, value: await res.json() };\n}`,
     codeLanguage: "typescript", tags: "typescript,patterns",
+    mediaUrl: null, mediaType: null,
     likesCount: 18, commentsCount: 2, repostsCount: 7,
     createdAt: new Date(Date.now() - 5 * 3600000),
     authorId: 3, authorName: "Sofia Jimenez", authorAvatar: null,
@@ -45,6 +49,7 @@ export const mockPosts: StoredPost[] = [
     content: "Tip: usa CSS container queries en lugar de media queries para componentes realmente reutilizables.",
     code: `@container (min-width: 400px) {\n  .card {\n    display: grid;\n    grid-template-columns: auto 1fr;\n  }\n}`,
     codeLanguage: "css", tags: "css,webdev",
+    mediaUrl: null, mediaType: null,
     likesCount: 9, commentsCount: 0, repostsCount: 2,
     createdAt: new Date(Date.now() - 24 * 3600000),
     authorId: 4, authorName: "Carlos Rivera", authorAvatar: null,
@@ -71,6 +76,8 @@ export async function listPosts(): Promise<PostRow[]> {
       code: posts.code,
       codeLanguage: posts.codeLanguage,
       tags: posts.tags,
+      mediaUrl: posts.mediaUrl,
+      mediaType: posts.mediaType,
       likesCount: posts.likesCount,
       commentsCount: posts.commentsCount,
       repostsCount: posts.repostsCount,
@@ -90,6 +97,8 @@ export async function createPost(data: {
   code: string | null;
   codeLanguage: string | null;
   tags: string | null;
+  mediaUrl: string | null;
+  mediaType: string | null;
   authorName: string | null;
   authorAvatar: string | null;
 }): Promise<{ id: number }> {
@@ -98,6 +107,7 @@ export async function createPost(data: {
     mockPosts.unshift({
       id, userId: data.userId,
       content: data.content, code: data.code, codeLanguage: data.codeLanguage, tags: data.tags,
+      mediaUrl: data.mediaUrl, mediaType: data.mediaType,
       likesCount: 0, commentsCount: 0, repostsCount: 0,
       createdAt: new Date(),
       authorId: data.userId, authorName: data.authorName, authorAvatar: data.authorAvatar,
@@ -111,6 +121,8 @@ export async function createPost(data: {
     code: data.code,
     codeLanguage: data.codeLanguage,
     tags: data.tags,
+    mediaUrl: data.mediaUrl,
+    mediaType: data.mediaType,
   });
   return { id: result.insertId };
 }

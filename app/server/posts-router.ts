@@ -12,6 +12,8 @@ export const postsRouter = createRouter({
       code: input.code ?? null,
       codeLanguage: input.codeLanguage ?? null,
       tags: input.tags ?? null,
+      mediaUrl: input.mediaUrl ?? null,
+      mediaType: input.mediaType ?? null,
       authorName: ctx.user.name ?? null,
       authorAvatar: ctx.user.avatar ?? null,
     })

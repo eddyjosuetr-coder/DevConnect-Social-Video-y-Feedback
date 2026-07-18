@@ -1,6 +1,7 @@
-import { useState } from 'react';
-import { Code2 } from 'lucide-react';
+import { useState, useRef, useCallback } from 'react';
+import { Code2, ImagePlus, X, Loader2, Film } from 'lucide-react';
 import { trpc } from '@/providers/trpc';
+import { uploadMedia, cloudinaryConfigured } from '@/lib/cloudinary';
 import type { Toast } from '@/hooks/useToast';
 import type { User } from '@db/schema';
 
@@ -9,6 +10,9 @@ const CODE_LANGUAGES = [
   'java', 'sql', 'bash', 'json', 'yaml', 'css', 'html', 'tsx', 'dockerfile',
 ];
 
+const MAX_IMAGE_MB = 10;
+const MAX_VIDEO_MB = 100;
+
 interface CreatePostFormProps {
   user: User;
   onClose: () => void;
@@ -16,43 +20,115 @@ interface CreatePostFormProps {
 }
 
 export default function CreatePostForm({ user, onClose, addToast }: CreatePostFormProps) {
-  const [content, setContent] = useState('');
-  const [code, setCode] = useState('');
-  const [lang, setLang] = useState('typescript');
-  const [showCode, setShowCode] = useState(false);
+  const [content,    setContent]    = useState('');
+  const [code,       setCode]       = useState('');
+  const [lang,       setLang]       = useState('typescript');
+  const [showCode,   setShowCode]   = useState(false);
+  const [mediaFile,  setMediaFile]  = useState<File | null>(null);
+  const [mediaPreview, setMediaPreview] = useState<string | null>(null);
+  const [mediaType,  setMediaType]  = useState<'image' | 'video' | null>(null);
+  const [uploading,  setUploading]  = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
   const utils = trpc.useUtils();
-
   const createPost = trpc.posts.create.useMutation();
 
-  const handleSubmit = () => {
-    if (!content.trim()) return;
-    createPost.mutate({ content, code: code || undefined, codeLanguage: lang }, {
-      onSuccess: (data) => {
-        utils.posts.list.setData(undefined, (old) => {
-          const newPost = {
-            id: data.id,
-            content,
-            code: code || null,
-            codeLanguage: lang,
-            tags: null,
-            likesCount: 0,
-            commentsCount: 0,
-            repostsCount: 0,
-            createdAt: new Date(),
-            authorId: user.id,
-            authorName: user.name,
-            authorAvatar: user.avatar,
-          };
-          return old ? [newPost, ...old] : [newPost];
-        });
-        addToast('Post publicado!', 'success');
-        onClose();
-      },
-      onError: (err) => {
-        addToast(`Error al publicar: ${err.message}`, 'error');
-      },
-    });
+  const handleFileSelect = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    const isVideo = file.type.startsWith('video/');
+    const isImage = file.type.startsWith('image/');
+    if (!isVideo && !isImage) {
+      addToast('Solo se permiten imágenes o videos', 'error');
+      return;
+    }
+
+    const maxMB = isVideo ? MAX_VIDEO_MB : MAX_IMAGE_MB;
+    if (file.size > maxMB * 1024 * 1024) {
+      addToast(`Archivo muy grande (máx ${maxMB}MB)`, 'error');
+      return;
+    }
+
+    const preview = URL.createObjectURL(file);
+    setMediaFile(file);
+    setMediaPreview(preview);
+    setMediaType(isVideo ? 'video' : 'image');
+    e.target.value = '';
+  }, [addToast]);
+
+  const removeMedia = () => {
+    if (mediaPreview) URL.revokeObjectURL(mediaPreview);
+    setMediaFile(null);
+    setMediaPreview(null);
+    setMediaType(null);
   };
+
+  const handleSubmit = async () => {
+    if (!content.trim()) return;
+
+    let uploadedUrl: string | undefined;
+    let uploadedType: 'image' | 'video' | undefined;
+
+    if (mediaFile) {
+      if (!cloudinaryConfigured()) {
+        addToast('Cloudinary no configurado — contacta al admin', 'error');
+        return;
+      }
+      try {
+        setUploading(true);
+        const result = await uploadMedia(mediaFile);
+        uploadedUrl  = result.url;
+        uploadedType = result.type;
+      } catch (err) {
+        addToast(err instanceof Error ? err.message : 'Error al subir archivo', 'error');
+        setUploading(false);
+        return;
+      } finally {
+        setUploading(false);
+      }
+    }
+
+    createPost.mutate(
+      {
+        content,
+        code: code || undefined,
+        codeLanguage: lang,
+        mediaUrl: uploadedUrl,
+        mediaType: uploadedType,
+      },
+      {
+        onSuccess: (data) => {
+          utils.posts.list.setData(undefined, (old) => {
+            const newPost = {
+              id: data.id,
+              content,
+              code: code || null,
+              codeLanguage: lang,
+              tags: null,
+              mediaUrl: uploadedUrl ?? null,
+              mediaType: uploadedType ?? null,
+              likesCount: 0,
+              commentsCount: 0,
+              repostsCount: 0,
+              createdAt: new Date(),
+              authorId: user.id,
+              authorName: user.name,
+              authorAvatar: user.avatar,
+            };
+            return old ? [newPost, ...old] : [newPost];
+          });
+          if (mediaPreview) URL.revokeObjectURL(mediaPreview);
+          addToast('Post publicado!', 'success');
+          onClose();
+        },
+        onError: (err) => {
+          addToast(`Error al publicar: ${err.message}`, 'error');
+        },
+      }
+    );
+  };
+
+  const isPending = uploading || createPost.isPending;
 
   return (
     <div className="border-b border-[#2A3347] p-4">
@@ -75,6 +151,7 @@ export default function CreatePostForm({ user, onClose, addToast }: CreatePostFo
           />
           <div className="text-right text-xs text-[#5A6680] mb-2">{content.length}/2000</div>
 
+          {/* Code block */}
           {showCode && (
             <div className="mb-3 p-3 bg-[#0D1117] rounded-lg border border-[#2A3347]">
               <select
@@ -94,15 +171,71 @@ export default function CreatePostForm({ user, onClose, addToast }: CreatePostFo
             </div>
           )}
 
+          {/* Media preview */}
+          {mediaPreview && mediaType && (
+            <div className="relative mb-3 rounded-xl overflow-hidden border border-[#2A3347]">
+              {mediaType === 'image' ? (
+                <img
+                  src={mediaPreview}
+                  alt=""
+                  className="w-full max-h-80 object-contain bg-[#060911]"
+                />
+              ) : (
+                <video
+                  src={mediaPreview}
+                  controls
+                  className="w-full max-h-80 bg-[#060911]"
+                />
+              )}
+              <button
+                onClick={removeMedia}
+                className="absolute top-2 right-2 w-7 h-7 bg-black/70 rounded-full flex items-center justify-center text-[#f3f2f2] hover:bg-black/90 transition-colors"
+              >
+                <X size={14} />
+              </button>
+              {uploading && (
+                <div className="absolute inset-0 bg-black/60 flex items-center justify-center gap-2 text-[#f3f2f2] text-sm">
+                  <Loader2 size={20} className="animate-spin" />
+                  Subiendo...
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* Toolbar */}
           <div className="flex items-center justify-between pt-2 border-t border-[#2A3347]">
-            <button
-              onClick={() => setShowCode(!showCode)}
-              className={`flex items-center gap-1.5 p-2 rounded-full transition-colors ${
-                showCode ? 'text-[#3B82F6] bg-[#3B82F6]/10' : 'text-[#3B82F6] hover:bg-[#3B82F6]/10'
-              }`}
-            >
-              <Code2 size={20} />
-            </button>
+            <div className="flex items-center gap-1">
+              <button
+                onClick={() => setShowCode(!showCode)}
+                title="Agregar código"
+                className={`flex items-center gap-1.5 p-2 rounded-full transition-colors ${
+                  showCode ? 'text-[#3B82F6] bg-[#3B82F6]/10' : 'text-[#3B82F6] hover:bg-[#3B82F6]/10'
+                }`}
+              >
+                <Code2 size={20} />
+              </button>
+              <button
+                onClick={() => fileInputRef.current?.click()}
+                title="Agregar foto o video"
+                disabled={!!mediaFile}
+                className={`flex items-center gap-1.5 p-2 rounded-full transition-colors ${
+                  mediaFile
+                    ? 'text-[#e1ff00] bg-[#e1ff00]/10'
+                    : 'text-[#e1ff00] hover:bg-[#e1ff00]/10'
+                }`}
+              >
+                {mediaType === 'video' ? <Film size={20} /> : <ImagePlus size={20} />}
+              </button>
+            </div>
+
+            <input
+              ref={fileInputRef}
+              type="file"
+              accept="image/*,video/*"
+              className="hidden"
+              onChange={handleFileSelect}
+            />
+
             <div className="flex gap-2">
               <button
                 onClick={onClose}
@@ -112,10 +245,11 @@ export default function CreatePostForm({ user, onClose, addToast }: CreatePostFo
               </button>
               <button
                 onClick={handleSubmit}
-                disabled={!content.trim() || createPost.isPending}
-                className="bg-[#e1ff00] text-[#050507] font-bold px-5 py-2.5 rounded-full text-sm hover:bg-[#d4e600] transition-colors disabled:opacity-50"
+                disabled={!content.trim() || isPending}
+                className="bg-[#e1ff00] text-[#050507] font-bold px-5 py-2.5 rounded-full text-sm hover:bg-[#d4e600] transition-colors disabled:opacity-50 flex items-center gap-2"
               >
-                {createPost.isPending ? 'Publicando...' : 'Postear'}
+                {isPending && <Loader2 size={14} className="animate-spin" />}
+                {uploading ? 'Subiendo...' : createPost.isPending ? 'Publicando...' : 'Postear'}
               </button>
             </div>
           </div>

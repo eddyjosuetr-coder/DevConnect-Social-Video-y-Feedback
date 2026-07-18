@@ -5,6 +5,8 @@ export const createPostSchema = z.object({
   code: z.string().max(5000).optional(),
   codeLanguage: z.string().max(50).optional(),
   tags: z.string().max(500).optional(),
+  mediaUrl: z.string().url().optional(),
+  mediaType: z.enum(['image', 'video']).optional(),
 });
 
 export const toggleLikeSchema = z.object({ postId: z.number().int() });
