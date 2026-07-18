@@ -43,6 +43,25 @@ export async function findUserById(id: number): Promise<User | undefined> {
   return rows.at(0);
 }
 
+export async function updateUserProfile(
+  id: number,
+  data: { name?: string; bio?: string; avatar?: string }
+): Promise<void> {
+  if (isMock) {
+    const user = mockUserById.get(id);
+    if (user) {
+      const updated: User = { ...user, ...data, updatedAt: new Date() };
+      mockUserById.set(id, updated);
+      mockUserByUnionId.set(user.unionId, updated);
+    }
+    return;
+  }
+  await getDb()
+    .update(schema.users)
+    .set({ ...data })
+    .where(eq(schema.users.id, id));
+}
+
 export async function upsertUser(data: InsertUser): Promise<void> {
   if (isMock) {
     const existing = mockUserByUnionId.get(data.unionId);

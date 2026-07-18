@@ -1,5 +1,7 @@
+import { useState } from 'react';
 import { Calendar, Code2, Heart, MessageCircle, Verified } from 'lucide-react';
 import PostCard from './PostCard';
+import EditProfileModal from './EditProfileModal';
 import type { Post } from './types';
 import type { User } from '@db/schema';
 import type { Toast } from '@/hooks/useToast';
@@ -13,12 +15,19 @@ interface ProfileTabProps {
 }
 
 export default function ProfileTab({ user, postsList, savedPostIds, onToggleSave, addToast }: ProfileTabProps) {
+  const [editOpen, setEditOpen] = useState(false);
+
   const myPosts = postsList.filter((p) => p.authorId === user.id);
   const totalLikesReceived = myPosts.reduce((sum, p) => sum + (p.likesCount ?? 0), 0);
   const totalComments = myPosts.reduce((sum, p) => sum + (p.commentsCount ?? 0), 0);
-  const handle = user.name?.toLowerCase().replace(/\s/g, '') ?? 'dev';
+  const handle = user.name?.toLowerCase().replace(/\s+/g, '') ?? 'dev';
 
-  const joinedDate = new Date().toLocaleDateString('es-ES', { month: 'long', year: 'numeric' });
+  const joinedDate = user.createdAt
+    ? new Date(user.createdAt).toLocaleDateString('es-ES', { month: 'long', year: 'numeric' })
+    : new Date().toLocaleDateString('es-ES', { month: 'long', year: 'numeric' });
+
+  const bioText = user.bio?.trim()
+    || 'Developer en DevConnect · Compartiendo código, aprendiendo y conectando con la comunidad.';
 
   return (
     <div>
@@ -41,7 +50,10 @@ export default function ProfileTab({ user, postsList, savedPostIds, onToggleSave
               </div>
             )}
           </div>
-          <button className="px-4 py-1.5 border border-[#2A3347] text-[#f3f2f2] text-sm font-semibold rounded-full hover:bg-[#1E2535] transition-colors">
+          <button
+            onClick={() => setEditOpen(true)}
+            className="px-4 py-1.5 border border-[#2A3347] text-[#f3f2f2] text-sm font-semibold rounded-full hover:bg-[#1E2535] hover:border-[#e1ff00]/30 transition-colors"
+          >
             Editar perfil
           </button>
         </div>
@@ -56,9 +68,7 @@ export default function ProfileTab({ user, postsList, savedPostIds, onToggleSave
         </div>
 
         {/* Bio */}
-        <p className="text-[#8B9AB0] text-sm mb-3 leading-relaxed">
-          Developer en DevConnect · Compartiendo código, aprendiendo y conectando con la comunidad.
-        </p>
+        <p className="text-[#8B9AB0] text-sm mb-3 leading-relaxed">{bioText}</p>
 
         {/* Meta */}
         <div className="flex items-center gap-4 text-xs text-[#5A6680] mb-4">
@@ -111,6 +121,14 @@ export default function ProfileTab({ user, postsList, savedPostIds, onToggleSave
             onToggleSave={() => onToggleSave(post.id)}
           />
         ))
+      )}
+
+      {editOpen && (
+        <EditProfileModal
+          user={user}
+          onClose={() => setEditOpen(false)}
+          addToast={addToast}
+        />
       )}
     </div>
   );
