@@ -1,4 +1,5 @@
-import { useState, useRef, useEffect, useCallback } from 'react';
+import { useState, useRef, useEffect } from 'react';
+import { createPortal } from 'react-dom';
 import { ChevronDown, Check } from 'lucide-react';
 
 export const LANG_COLORS: Record<string, string> = {
@@ -29,22 +30,21 @@ interface LangSelectProps {
 }
 
 export default function LangSelect({ value, onChange }: LangSelectProps) {
-  const [open, setOpen]   = useState(false);
-  const [style, setStyle] = useState<React.CSSProperties>({});
-  const triggerRef        = useRef<HTMLButtonElement>(null);
-  const color             = LANG_COLORS[value] ?? '#5A6680';
+  const [open, setOpen]         = useState(false);
+  const [menuStyle, setMenuStyle] = useState<React.CSSProperties>({});
+  const btnRef                  = useRef<HTMLButtonElement>(null);
+  const color                   = LANG_COLORS[value] ?? '#5A6680';
 
-  const openMenu = useCallback(() => {
-    const rect = triggerRef.current?.getBoundingClientRect();
-    if (!rect) return;
-    const spaceBelow = window.innerHeight - rect.bottom;
-    const menuH      = 232;
-    const top        = spaceBelow >= menuH + 8
-      ? rect.bottom + 6
-      : rect.top - menuH - 6;
-    setStyle({ top, left: rect.left, minWidth: Math.max(rect.width, 152) });
+  function openMenu(e: React.MouseEvent) {
+    e.stopPropagation();
+    const r = btnRef.current?.getBoundingClientRect();
+    if (!r) return;
+    const spaceBelow = window.innerHeight - r.bottom;
+    const dropH      = 238;
+    const top        = spaceBelow >= dropH + 10 ? r.bottom + 6 : r.top - dropH - 6;
+    setMenuStyle({ top, left: r.left, minWidth: Math.max(r.width, 152) });
     setOpen(true);
-  }, []);
+  }
 
   useEffect(() => {
     if (!open) return;
@@ -60,98 +60,65 @@ export default function LangSelect({ value, onChange }: LangSelectProps) {
   return (
     <>
       <button
-        ref={triggerRef}
-        onClick={() => (open ? setOpen(false) : openMenu())}
-        className="flex items-center gap-1.5 rounded-md px-2 py-1 transition-all duration-150 focus:outline-none focus-visible:ring-2 focus-visible:ring-[#e1ff00]/30"
-        style={{
-          background: open ? 'rgba(255,255,255,0.05)' : 'transparent',
-          color:      open ? '#C9D5E8' : '#8B9AB0',
-        }}
-        onMouseEnter={(e) => {
-          (e.currentTarget as HTMLElement).style.background = 'rgba(255,255,255,0.05)';
-          (e.currentTarget as HTMLElement).style.color      = '#C9D5E8';
-        }}
-        onMouseLeave={(e) => {
-          if (!open) {
-            (e.currentTarget as HTMLElement).style.background = 'transparent';
-            (e.currentTarget as HTMLElement).style.color      = '#8B9AB0';
-          }
-        }}
+        ref={btnRef}
+        type="button"
+        onClick={(e) => (open ? (e.stopPropagation(), setOpen(false)) : openMenu(e))}
+        className="flex items-center gap-1.5 rounded-md px-2 py-1 transition-colors duration-150 focus:outline-none"
+        style={{ background: open ? 'rgba(255,255,255,0.06)' : 'transparent', color: open ? '#C9D5E8' : '#8B9AB0' }}
+        onMouseEnter={(e) => { if (!open) { const el = e.currentTarget as HTMLElement; el.style.background = 'rgba(255,255,255,0.05)'; el.style.color = '#C9D5E8'; } }}
+        onMouseLeave={(e) => { if (!open) { const el = e.currentTarget as HTMLElement; el.style.background = 'transparent'; el.style.color = '#8B9AB0'; } }}
       >
-        <span
-          className="w-2 h-2 rounded-full shrink-0"
-          style={{ backgroundColor: color, boxShadow: `0 0 6px ${color}80` }}
-        />
+        <span className="w-2 h-2 rounded-full shrink-0" style={{ backgroundColor: color, boxShadow: `0 0 5px ${color}90` }} />
         <span className="text-[11px] font-mono tracking-wide">{value}</span>
-        <ChevronDown
-          size={10}
-          style={{
-            color:     '#3D4E68',
-            transform: open ? 'rotate(180deg)' : 'rotate(0deg)',
-            transition: 'transform 0.18s ease',
-          }}
-        />
+        <ChevronDown size={10} style={{ color: '#3D4E68', transform: open ? 'rotate(180deg)' : 'rotate(0)', transition: 'transform 0.18s ease' }} />
       </button>
 
-      {open && (
+      {open && createPortal(
         <>
-          {/* Invisible backdrop */}
+          {/* Backdrop — catches outside clicks */}
           <div
-            className="fixed inset-0 z-[300]"
+            style={{ position: 'fixed', inset: 0, zIndex: 9998 }}
             onClick={() => setOpen(false)}
           />
 
-          {/* Dropdown panel */}
+          {/* Dropdown menu */}
           <div
-            className="fixed z-[301] rounded-xl border border-[#1E2535] shadow-[0_8px_40px_rgba(0,0,0,0.6)] overflow-y-auto"
             style={{
-              ...style,
-              background:  '#0D1220',
-              maxHeight:   232,
+              position:   'fixed',
+              zIndex:     9999,
+              background: '#0D1220',
+              border:     '1px solid #1E2535',
+              borderRadius: '12px',
+              boxShadow:  '0 8px 40px rgba(0,0,0,0.72)',
+              maxHeight:  238,
+              overflowY:  'auto',
               scrollbarWidth: 'thin',
               scrollbarColor: '#1E2535 transparent',
-              animation:   'langDropIn 0.14s ease forwards',
+              ...menuStyle,
             }}
           >
-            <style>{`
-              @keyframes langDropIn {
-                from { opacity: 0; transform: translateY(-6px) scale(0.98); }
-                to   { opacity: 1; transform: translateY(0)    scale(1);    }
-              }
-            `}</style>
-
             {CODE_LANGUAGES.map((lang) => {
-              const c          = LANG_COLORS[lang] ?? '#5A6680';
-              const isSelected = lang === value;
+              const c   = LANG_COLORS[lang] ?? '#5A6680';
+              const sel = lang === value;
               return (
                 <button
                   key={lang}
-                  onClick={() => { onChange(lang); setOpen(false); }}
+                  type="button"
+                  onClick={(e) => { e.stopPropagation(); onChange(lang); setOpen(false); }}
+                  style={{ color: sel ? '#f3f2f2' : '#8B9AB0', background: sel ? 'rgba(225,255,0,0.06)' : 'transparent' }}
                   className="w-full flex items-center gap-2.5 px-3 py-[7px] text-left transition-colors duration-100"
-                  style={{
-                    background: isSelected ? 'rgba(225,255,0,0.06)' : 'transparent',
-                    color:      isSelected ? '#f3f2f2' : '#8B9AB0',
-                  }}
-                  onMouseEnter={(e) => {
-                    (e.currentTarget as HTMLElement).style.background = '#1a2338';
-                    (e.currentTarget as HTMLElement).style.color      = '#f3f2f2';
-                  }}
-                  onMouseLeave={(e) => {
-                    (e.currentTarget as HTMLElement).style.background = isSelected ? 'rgba(225,255,0,0.06)' : 'transparent';
-                    (e.currentTarget as HTMLElement).style.color      = isSelected ? '#f3f2f2' : '#8B9AB0';
-                  }}
+                  onMouseEnter={(e) => { const el = e.currentTarget as HTMLElement; el.style.background = '#1a2338'; el.style.color = '#f3f2f2'; }}
+                  onMouseLeave={(e) => { const el = e.currentTarget as HTMLElement; el.style.background = sel ? 'rgba(225,255,0,0.06)' : 'transparent'; el.style.color = sel ? '#f3f2f2' : '#8B9AB0'; }}
                 >
-                  <span
-                    className="w-2 h-2 rounded-full shrink-0"
-                    style={{ backgroundColor: c, boxShadow: isSelected ? `0 0 6px ${c}80` : 'none' }}
-                  />
+                  <span className="w-2 h-2 rounded-full shrink-0" style={{ backgroundColor: c, boxShadow: sel ? `0 0 5px ${c}80` : 'none' }} />
                   <span className="text-[11px] font-mono flex-1 tracking-wide">{lang}</span>
-                  {isSelected && <Check size={10} className="text-[#e1ff00] shrink-0" />}
+                  {sel && <Check size={10} style={{ color: '#e1ff00' }} className="shrink-0" />}
                 </button>
               );
             })}
           </div>
-        </>
+        </>,
+        document.body
       )}
     </>
   );
