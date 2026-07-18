@@ -33765,6 +33765,26 @@ async function deletePost(postId, userId) {
   await db.delete(posts).where(and(eq(posts.id, postId), eq(posts.userId, userId)));
   return { success: true };
 }
+async function updatePost(postId, userId, data) {
+  if (isMock) {
+    const post = mockPosts.find((p) => p.id === postId && p.userId === userId);
+    if (!post) return { success: false };
+    if (data.content !== void 0) post.content = data.content;
+    if (data.code !== void 0) post.code = data.code;
+    if (data.codeLanguage !== void 0) post.codeLanguage = data.codeLanguage;
+    if (data.tags !== void 0) post.tags = data.tags;
+    return { success: true };
+  }
+  const db = getDb();
+  const fields = {};
+  if (data.content !== void 0) fields.content = data.content;
+  if (data.code !== void 0) fields.code = data.code ?? void 0;
+  if (data.codeLanguage !== void 0) fields.codeLanguage = data.codeLanguage ?? void 0;
+  if (data.tags !== void 0) fields.tags = data.tags ?? void 0;
+  if (Object.keys(fields).length === 0) return { success: false };
+  await db.update(posts).set(fields).where(and(eq(posts.id, postId), eq(posts.userId, userId)));
+  return { success: true };
+}
 var nextPostId, mockPosts, mockLikes, isMock;
 var init_posts = __esm({
   "server/queries/posts.ts"() {
@@ -48157,7 +48177,7 @@ var init_zod = __esm({
 });
 
 // contracts/schemas.ts
-var createPostSchema, toggleLikeSchema, isLikedSchema, deletePostSchema, listCommentsSchema, createCommentSchema, deleteCommentSchema, toggleRepostSchema, quoteRepostSchema, listRepostsByUserSchema, sendMessageSchema, getThreadSchema, markReadSchema, searchUsersSchema, toggleFollowSchema, isFollowingSchema, getUserProfileSchema, listPostsByUserSchema, updateProfileSchema;
+var createPostSchema, toggleLikeSchema, isLikedSchema, deletePostSchema, updatePostSchema, listCommentsSchema, createCommentSchema, deleteCommentSchema, toggleRepostSchema, quoteRepostSchema, listRepostsByUserSchema, sendMessageSchema, getThreadSchema, markReadSchema, searchUsersSchema, toggleFollowSchema, isFollowingSchema, getUserProfileSchema, listPostsByUserSchema, updateProfileSchema;
 var init_schemas3 = __esm({
   "contracts/schemas.ts"() {
     init_zod();
@@ -48166,12 +48186,19 @@ var init_schemas3 = __esm({
       code: external_exports.string().max(5e3).optional(),
       codeLanguage: external_exports.string().max(50).optional(),
       tags: external_exports.string().max(500).optional(),
-      mediaUrl: external_exports.string().url().optional(),
+      mediaUrl: external_exports.string().max(5e4).optional(),
       mediaType: external_exports.enum(["image", "video"]).optional()
     });
     toggleLikeSchema = external_exports.object({ postId: external_exports.number().int() });
     isLikedSchema = external_exports.object({ postId: external_exports.number().int() });
     deletePostSchema = external_exports.object({ postId: external_exports.number().int() });
+    updatePostSchema = external_exports.object({
+      postId: external_exports.number().int(),
+      content: external_exports.string().min(1).max(2e3).optional(),
+      code: external_exports.string().max(5e3).nullable().optional(),
+      codeLanguage: external_exports.string().max(50).nullable().optional(),
+      tags: external_exports.string().max(500).nullable().optional()
+    });
     listCommentsSchema = external_exports.object({ postId: external_exports.number().int() });
     createCommentSchema = external_exports.object({
       postId: external_exports.number().int(),
@@ -48406,6 +48433,14 @@ var init_posts_router = __esm({
       ),
       delete: authedQuery.input(deletePostSchema).mutation(
         ({ ctx, input }) => deletePost(input.postId, ctx.user.id)
+      ),
+      update: authedQuery.input(updatePostSchema).mutation(
+        ({ ctx, input }) => updatePost(input.postId, ctx.user.id, {
+          content: input.content,
+          code: input.code,
+          codeLanguage: input.codeLanguage,
+          tags: input.tags
+        })
       )
     });
   }
