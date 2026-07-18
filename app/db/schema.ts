@@ -69,6 +69,7 @@ export const reposts = mysqlTable("reposts", {
   id: serial("id").primaryKey(),
   postId: bigint("postId", { mode: "number", unsigned: true }).notNull(),
   userId: bigint("userId", { mode: "number", unsigned: true }).notNull(),
+  quoteText: text("quoteText"),
   createdAt: timestamp("createdAt").defaultNow().notNull(),
 }, (table) => ({
   userPostUnique: uniqueIndex("reposts_user_post_idx").on(table.postId, table.userId),

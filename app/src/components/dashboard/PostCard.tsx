@@ -1,11 +1,12 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router';
-import { Heart, MessageCircle, Repeat2, Share2, Verified, Bookmark, Copy, Check } from 'lucide-react';
+import { Heart, MessageCircle, Repeat2, Share2, Verified, Bookmark, Copy, Check, Pencil } from 'lucide-react';
 import { trpc } from '@/providers/trpc';
 import { formatDate } from '@/lib/utils';
 import type { Toast } from '@/hooks/useToast';
 import type { Post } from './types';
 import CommentSection from './CommentSection';
+import QuoteModal from './QuoteModal';
 
 interface PostCardProps {
   post: Post;
@@ -29,9 +30,12 @@ export default function PostCard({ post, addToast, isSaved = false, onToggleSave
   const [repostCount, setRepostCount] = useState(post.repostsCount);
   const [isReposted, setIsReposted] = useState(false);
   const [codeCopied, setCodeCopied] = useState(false);
+  const [repostPopoverOpen, setRepostPopoverOpen] = useState(false);
+  const [quoteModalOpen, setQuoteModalOpen] = useState(false);
 
   const toggleLike = trpc.posts.toggleLike.useMutation();
   const toggleRepost = trpc.reposts.toggle.useMutation();
+  const quoteRepost = trpc.reposts.quote.useMutation();
 
   const handle = post.authorName?.toLowerCase().replace(/\s/g, '') ?? 'dev';
   const langColor = LANG_COLORS[post.codeLanguage ?? ''] ?? '#5A6680';
@@ -61,6 +65,18 @@ export default function PostCard({ post, addToast, isSaved = false, onToggleSave
         setRepostCount((prev) => nowReposted ? Math.max(0, prev - 1) : prev + 1);
         addToast(`Error: ${err.message}`, 'error');
       },
+    });
+  }
+
+  function handleQuoteSubmit(quoteText: string) {
+    setQuoteModalOpen(false);
+    if (!isReposted) {
+      setIsReposted(true);
+      setRepostCount((prev) => prev + 1);
+    }
+    quoteRepost.mutate({ postId: post.id, quoteText }, {
+      onSuccess: () => addToast('Publicación citada!', 'success'),
+      onError: (err) => addToast(`Error: ${err.message}`, 'error'),
     });
   }
 
@@ -206,13 +222,50 @@ export default function PostCard({ post, addToast, isSaved = false, onToggleSave
               activeColor="#3B82F6"
               onClick={() => setCommentsOpen((v) => !v)}
             />
-            <ActionBtn
-              icon={<Repeat2 size={16} />}
-              count={repostCount}
-              active={isReposted}
-              activeColor="#22C55E"
-              onClick={handleRepost}
-            />
+            {/* Repost button with popover */}
+            <div className="relative">
+              <button
+                onClick={() => setRepostPopoverOpen((v) => !v)}
+                className="flex items-center gap-1.5 p-2 rounded-lg transition-all"
+                style={{ color: isReposted ? '#22C55E' : '#3D4E68' }}
+                onMouseEnter={(e) => {
+                  if (!isReposted) (e.currentTarget as HTMLElement).style.color = '#22C55E';
+                  (e.currentTarget as HTMLElement).style.backgroundColor = '#22C55E12';
+                }}
+                onMouseLeave={(e) => {
+                  if (!isReposted) (e.currentTarget as HTMLElement).style.color = '#3D4E68';
+                  (e.currentTarget as HTMLElement).style.backgroundColor = 'transparent';
+                }}
+              >
+                <Repeat2 size={16} />
+                <span className="text-xs font-mono tabular-nums">{repostCount}</span>
+              </button>
+              {repostPopoverOpen && (
+                <>
+                  <div
+                    className="fixed inset-0 z-[100]"
+                    onClick={() => setRepostPopoverOpen(false)}
+                  />
+                  <div className="absolute bottom-full left-0 mb-1 z-[101] rounded-xl border border-[#1E2535] shadow-2xl overflow-hidden min-w-[175px]"
+                    style={{ background: '#0D1220' }}>
+                    <button
+                      onClick={() => { handleRepost(); setRepostPopoverOpen(false); }}
+                      className="w-full flex items-center gap-2.5 px-4 py-3 text-sm text-[#C9D5E8] hover:bg-[#1E2535] hover:text-[#f3f2f2] transition-colors text-left"
+                    >
+                      <Repeat2 size={14} className="text-[#22C55E]" />
+                      {isReposted ? 'Eliminar repost' : 'Repostear'}
+                    </button>
+                    <button
+                      onClick={() => { setRepostPopoverOpen(false); setQuoteModalOpen(true); }}
+                      className="w-full flex items-center gap-2.5 px-4 py-3 text-sm text-[#C9D5E8] hover:bg-[#1E2535] hover:text-[#f3f2f2] transition-colors text-left border-t border-[#1E2535]"
+                    >
+                      <Pencil size={14} className="text-[#e1ff00]" />
+                      Citar publicación
+                    </button>
+                  </div>
+                </>
+              )}
+            </div>
             <ActionBtn
               icon={<Heart size={16} className={isLiked ? 'fill-[#EF4444]' : ''} />}
               count={likesCount}
@@ -238,6 +291,15 @@ export default function PostCard({ post, addToast, isSaved = false, onToggleSave
           <CommentSection postId={post.id} isOpen={commentsOpen} addToast={addToast} />
         </div>
       </div>
+
+      {quoteModalOpen && (
+        <QuoteModal
+          post={post}
+          onClose={() => setQuoteModalOpen(false)}
+          onSubmit={handleQuoteSubmit}
+          isLoading={quoteRepost.isPending}
+        />
+      )}
     </article>
   );
 }

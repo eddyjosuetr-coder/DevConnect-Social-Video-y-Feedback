@@ -1,7 +1,9 @@
 import { useState } from 'react';
-import { Calendar, Code2, Heart, MessageCircle, Verified } from 'lucide-react';
+import { Calendar, Code2, Heart, MessageCircle, Verified, Repeat2 } from 'lucide-react';
 import PostCard from './PostCard';
+import SharedPostCard from './SharedPostCard';
 import EditProfileModal from './EditProfileModal';
+import { trpc } from '@/providers/trpc';
 import type { Post } from './types';
 import type { User } from '@db/schema';
 import type { Toast } from '@/hooks/useToast';
@@ -16,6 +18,12 @@ interface ProfileTabProps {
 
 export default function ProfileTab({ user, postsList, savedPostIds, onToggleSave, addToast }: ProfileTabProps) {
   const [editOpen, setEditOpen] = useState(false);
+  const [profileTab, setProfileTab] = useState<'posts' | 'compartidos'>('posts');
+
+  const { data: myReposts, isLoading: repostsLoading } = trpc.reposts.listByUser.useQuery(
+    { userId: user.id },
+    { enabled: profileTab === 'compartidos' }
+  );
 
   const myPosts = postsList.filter((p) => p.authorId === user.id);
   const totalLikesReceived = myPosts.reduce((sum, p) => sum + (p.likesCount ?? 0), 0);
@@ -116,8 +124,34 @@ export default function ProfileTab({ user, postsList, savedPostIds, onToggleSave
         </div>
       </div>
 
+      {/* Tabs */}
+      <div className="border-b border-[#2A3347] flex">
+        <button
+          onClick={() => setProfileTab('posts')}
+          className="flex items-center gap-2 px-5 py-3 border-b-2 text-sm font-semibold transition-colors"
+          style={{
+            borderColor: profileTab === 'posts' ? '#e1ff00' : 'transparent',
+            color: profileTab === 'posts' ? '#f3f2f2' : '#5A6680',
+          }}
+        >
+          <Code2 size={13} style={{ color: profileTab === 'posts' ? '#e1ff00' : '#5A6680' }} />
+          Posts
+        </button>
+        <button
+          onClick={() => setProfileTab('compartidos')}
+          className="flex items-center gap-2 px-5 py-3 border-b-2 text-sm font-semibold transition-colors"
+          style={{
+            borderColor: profileTab === 'compartidos' ? '#22C55E' : 'transparent',
+            color: profileTab === 'compartidos' ? '#f3f2f2' : '#5A6680',
+          }}
+        >
+          <Repeat2 size={13} style={{ color: profileTab === 'compartidos' ? '#22C55E' : '#5A6680' }} />
+          Compartidos
+        </button>
+      </div>
+
       {/* Posts */}
-      {myPosts.length === 0 ? (
+      {profileTab === 'posts' && (myPosts.length === 0 ? (
         <div className="text-center py-16 px-4">
           <Code2 size={40} className="text-[#2A3347] mx-auto mb-4" />
           <p className="text-[#5A6680] text-sm">Aún no tienes posts. ¡Comparte algo!</p>
@@ -132,7 +166,30 @@ export default function ProfileTab({ user, postsList, savedPostIds, onToggleSave
             onToggleSave={() => onToggleSave(post.id)}
           />
         ))
-      )}
+      ))}
+
+      {/* Compartidos */}
+      {profileTab === 'compartidos' && (repostsLoading ? (
+        <div className="flex justify-center py-14">
+          <div className="w-6 h-6 rounded-full border-2 border-t-[#22C55E] border-[#1E2535] animate-spin" />
+        </div>
+      ) : !myReposts || myReposts.length === 0 ? (
+        <div className="flex flex-col items-center justify-center py-16 gap-3">
+          <Repeat2 size={36} className="text-[#2A3347]" />
+          <p className="text-[#5A6680] text-sm">Sin compartidos todavía</p>
+        </div>
+      ) : (
+        myReposts.map((r) => (
+          <SharedPostCard
+            key={r.repostId}
+            repostId={r.repostId}
+            repostCreatedAt={r.repostCreatedAt}
+            quoteText={r.quoteText}
+            post={r.post}
+            addToast={addToast}
+          />
+        ))
+      ))}
 
       {editOpen && (
         <EditProfileModal

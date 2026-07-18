@@ -70,6 +70,7 @@ export function getDb() {
         INDEX notif_recipient_idx (recipientId),
         INDEX notif_actor_idx (actorId)
       )`);
+      await run("ALTER TABLE reposts ADD COLUMN quoteText TEXT");
       await run(`CREATE TABLE IF NOT EXISTS follows (
         id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
         followerId BIGINT UNSIGNED NOT NULL,

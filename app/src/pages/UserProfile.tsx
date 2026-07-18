@@ -1,10 +1,11 @@
 import { useState, useId } from 'react';
 import { useParams, useNavigate } from 'react-router';
-import { ArrowLeft, Calendar, UserCheck, UserPlus, Verified, LayoutGrid, MessageSquare } from 'lucide-react';
+import { ArrowLeft, Calendar, UserCheck, UserPlus, Verified, LayoutGrid, MessageSquare, Repeat2 } from 'lucide-react';
 import { trpc } from '@/providers/trpc';
 import { useAuth } from '@/hooks/useAuth';
 import { useToast } from '@/hooks/useToast';
 import PostCard from '@/components/dashboard/PostCard';
+import SharedPostCard from '@/components/dashboard/SharedPostCard';
 import ToastContainer from '@/components/ToastContainer';
 import DashboardSidebar from '@/components/dashboard/DashboardSidebar';
 import type { User as AuthUser } from '@db/schema';
@@ -173,6 +174,7 @@ export default function UserProfile() {
 
   const isOwnProfile = isAuthenticated && me?.id === userId;
   const [mobileSidebar, setMobileSidebar] = useState(false);
+  const [profileTab, setProfileTab] = useState<'posts' | 'compartidos'>('posts');
   const [c1, c2] = palette(userId);
 
   const { data: profile, isLoading: profileLoading } = trpc.users.getProfile.useQuery(
@@ -182,6 +184,10 @@ export default function UserProfile() {
   const { data: userPosts, isLoading: postsLoading } = trpc.posts.listByUser.useQuery(
     { userId },
     { enabled: !!userId && !Number.isNaN(userId) }
+  );
+  const { data: userReposts, isLoading: repostsLoading } = trpc.reposts.listByUser.useQuery(
+    { userId },
+    { enabled: !!userId && !Number.isNaN(userId) && profileTab === 'compartidos' }
   );
   const { data: isFollowingData, refetch: refetchIsFollowing } = trpc.follows.isFollowing.useQuery(
     { followingId: userId },
@@ -394,35 +400,80 @@ export default function UserProfile() {
           </div>
         </div>
 
-        {/* ── Posts tab ── */}
+        {/* ── Tabs ── */}
         <div className="mt-1 border-b border-[#1A2133] flex">
-          <div
-            className="flex items-center gap-2 px-5 py-3 border-b-2 text-sm font-semibold cursor-default"
-            style={{ borderColor: c1, color: '#f3f2f2' }}
+          <button
+            onClick={() => setProfileTab('posts')}
+            className="flex items-center gap-2 px-5 py-3 border-b-2 text-sm font-semibold transition-colors"
+            style={{
+              borderColor: profileTab === 'posts' ? c1 : 'transparent',
+              color: profileTab === 'posts' ? '#f3f2f2' : '#5A6680',
+            }}
           >
-            <LayoutGrid size={13} style={{ color: c1 }} />
+            <LayoutGrid size={13} style={{ color: profileTab === 'posts' ? c1 : '#5A6680' }} />
             Posts
-          </div>
+          </button>
+          <button
+            onClick={() => setProfileTab('compartidos')}
+            className="flex items-center gap-2 px-5 py-3 border-b-2 text-sm font-semibold transition-colors"
+            style={{
+              borderColor: profileTab === 'compartidos' ? '#22C55E' : 'transparent',
+              color: profileTab === 'compartidos' ? '#f3f2f2' : '#5A6680',
+            }}
+          >
+            <Repeat2 size={13} style={{ color: profileTab === 'compartidos' ? '#22C55E' : '#5A6680' }} />
+            Compartidos
+          </button>
         </div>
 
-        {/* ── Feed ── */}
-        {postsLoading ? (
-          <div className="flex justify-center py-14">
-            <div className="w-7 h-7 rounded-full border-2 border-t-transparent animate-spin"
-              style={{ borderColor: `${c1}33`, borderTopColor: c1 }} />
-          </div>
-        ) : !userPosts || userPosts.length === 0 ? (
-          <div className="flex flex-col items-center justify-center py-16 gap-3">
-            <div className="w-12 h-12 rounded-xl flex items-center justify-center"
-              style={{ background: `${c1}10`, border: `1px solid ${c1}18` }}>
-              <LayoutGrid size={22} style={{ color: c1, opacity: 0.5 }} />
+        {/* ── Posts feed ── */}
+        {profileTab === 'posts' && (
+          postsLoading ? (
+            <div className="flex justify-center py-14">
+              <div className="w-7 h-7 rounded-full border-2 border-t-transparent animate-spin"
+                style={{ borderColor: `${c1}33`, borderTopColor: c1 }} />
             </div>
-            <p className="text-[#5A6680] text-xs font-mono">Sin posts todavía</p>
-          </div>
-        ) : (
-          userPosts.map((post) => (
-            <PostCard key={post.id} post={post} addToast={addToast} />
-          ))
+          ) : !userPosts || userPosts.length === 0 ? (
+            <div className="flex flex-col items-center justify-center py-16 gap-3">
+              <div className="w-12 h-12 rounded-xl flex items-center justify-center"
+                style={{ background: `${c1}10`, border: `1px solid ${c1}18` }}>
+                <LayoutGrid size={22} style={{ color: c1, opacity: 0.5 }} />
+              </div>
+              <p className="text-[#5A6680] text-xs font-mono">Sin posts todavía</p>
+            </div>
+          ) : (
+            userPosts.map((post) => (
+              <PostCard key={post.id} post={post} addToast={addToast} />
+            ))
+          )
+        )}
+
+        {/* ── Compartidos feed ── */}
+        {profileTab === 'compartidos' && (
+          repostsLoading ? (
+            <div className="flex justify-center py-14">
+              <div className="w-7 h-7 rounded-full border-2 border-t-transparent animate-spin"
+                style={{ borderColor: '#22C55E33', borderTopColor: '#22C55E' }} />
+            </div>
+          ) : !userReposts || userReposts.length === 0 ? (
+            <div className="flex flex-col items-center justify-center py-16 gap-3">
+              <div className="w-12 h-12 rounded-xl flex items-center justify-center bg-[#22C55E]/5 border border-[#22C55E]/10">
+                <Repeat2 size={22} className="text-[#22C55E] opacity-40" />
+              </div>
+              <p className="text-[#5A6680] text-xs font-mono">Sin compartidos todavía</p>
+            </div>
+          ) : (
+            userReposts.map((r) => (
+              <SharedPostCard
+                key={r.repostId}
+                repostId={r.repostId}
+                repostCreatedAt={r.repostCreatedAt}
+                quoteText={r.quoteText}
+                post={r.post}
+                addToast={addToast}
+              />
+            ))
+          )
         )}
         </div>
       </main>
