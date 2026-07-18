@@ -1,4 +1,4 @@
-import { eq, and } from "drizzle-orm";
+import { eq, and, count } from "drizzle-orm";
 import { getDb } from "./connection";
 import { follows } from "@db/schema";
 
@@ -69,4 +69,28 @@ export async function listFollowing(followerId: number): Promise<number[]> {
     .from(follows)
     .where(eq(follows.followerId, followerId));
   return rows.map((r) => r.followingId);
+}
+
+export async function getFollowerCount(userId: number): Promise<number> {
+  if (isMock) {
+    return [...mockFollows].filter((k) => k.endsWith(`:${userId}`)).length;
+  }
+  const db = getDb();
+  const [row] = await db
+    .select({ total: count() })
+    .from(follows)
+    .where(eq(follows.followingId, userId));
+  return row?.total ?? 0;
+}
+
+export async function getFollowingCount(userId: number): Promise<number> {
+  if (isMock) {
+    return [...mockFollows].filter((k) => k.startsWith(`${userId}:`)).length;
+  }
+  const db = getDb();
+  const [row] = await db
+    .select({ total: count() })
+    .from(follows)
+    .where(eq(follows.followerId, userId));
+  return row?.total ?? 0;
 }

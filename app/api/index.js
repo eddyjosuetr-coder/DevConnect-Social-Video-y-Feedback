@@ -3162,7 +3162,7 @@ function _takeWithGrace() {
       const iterator = _usingCtx$1.a(iteratorResource(iterable));
       let result;
       const timer = _usingCtx$1.u(timerResource(opts.gracePeriodMs));
-      let count = opts.count;
+      let count2 = opts.count;
       let timerPromise = new Promise(() => {
       });
       while (true) {
@@ -3170,7 +3170,7 @@ function _takeWithGrace() {
         if (result === disposablePromiseTimerResult) throwAbortError();
         if (result.done) return result.value;
         yield result.value;
-        if (--count === 0) timerPromise = timer.start();
+        if (--count2 === 0) timerPromise = timer.start();
         result = null;
       }
     } catch (_) {
@@ -8390,8 +8390,12 @@ var init_relations = __esm({
 });
 
 // node_modules/drizzle-orm/sql/functions/aggregate.js
+function count(expression) {
+  return sql`count(${expression || sql.raw("*")})`.mapWith(Number);
+}
 var init_aggregate = __esm({
   "node_modules/drizzle-orm/sql/functions/aggregate.js"() {
+    init_sql();
   }
 });
 
@@ -10094,51 +10098,51 @@ var require_denque = __commonJS({
       }
       return item;
     };
-    Denque.prototype.remove = function remove(index, count) {
+    Denque.prototype.remove = function remove(index, count2) {
       var i = index;
       var removed;
-      var del_count = count;
+      var del_count = count2;
       if (i !== (i | 0)) {
         return void 0;
       }
       if (this._head === this._tail) return void 0;
       var size = this.size();
       var len = this._list.length;
-      if (i >= size || i < -size || count < 1) return void 0;
+      if (i >= size || i < -size || count2 < 1) return void 0;
       if (i < 0) i += size;
-      if (count === 1 || !count) {
+      if (count2 === 1 || !count2) {
         removed = new Array(1);
         removed[0] = this.removeOne(i);
         return removed;
       }
-      if (i === 0 && i + count >= size) {
+      if (i === 0 && i + count2 >= size) {
         removed = this.toArray();
         this.clear();
         return removed;
       }
-      if (i + count > size) count = size - i;
+      if (i + count2 > size) count2 = size - i;
       var k;
-      removed = new Array(count);
-      for (k = 0; k < count; k++) {
+      removed = new Array(count2);
+      for (k = 0; k < count2; k++) {
         removed[k] = this._list[this._head + i + k & this._capacityMask];
       }
       i = this._head + i & this._capacityMask;
-      if (index + count === size) {
-        this._tail = this._tail - count + len & this._capacityMask;
-        for (k = count; k > 0; k--) {
+      if (index + count2 === size) {
+        this._tail = this._tail - count2 + len & this._capacityMask;
+        for (k = count2; k > 0; k--) {
           this._list[i = i + 1 + len & this._capacityMask] = void 0;
         }
         return removed;
       }
       if (index === 0) {
-        this._head = this._head + count + len & this._capacityMask;
-        for (k = count - 1; k > 0; k--) {
+        this._head = this._head + count2 + len & this._capacityMask;
+        for (k = count2 - 1; k > 0; k--) {
           this._list[i = i + 1 + len & this._capacityMask] = void 0;
         }
         return removed;
       }
       if (i < size / 2) {
-        this._head = this._head + index + count + len & this._capacityMask;
+        this._head = this._head + index + count2 + len & this._capacityMask;
         for (k = index; k > 0; k--) {
           this.unshift(this._list[i = i - 1 + len & this._capacityMask]);
         }
@@ -10150,8 +10154,8 @@ var require_denque = __commonJS({
         if (index < 0) this._tail = i;
       } else {
         this._tail = i;
-        i = i + count + len & this._capacityMask;
-        for (k = size - (count + index); k > 0; k--) {
+        i = i + count2 + len & this._capacityMask;
+        for (k = size - (count2 + index); k > 0; k--) {
           this.push(this._list[i++]);
         }
         i = this._tail;
@@ -10163,7 +10167,7 @@ var require_denque = __commonJS({
       if (this._head < 2 && this._tail > 1e4 && this._tail <= len >>> 2) this._shrinkArray();
       return removed;
     };
-    Denque.prototype.splice = function splice(index, count) {
+    Denque.prototype.splice = function splice(index, count2) {
       var i = index;
       if (i !== (i | 0)) {
         return void 0;
@@ -10183,13 +10187,13 @@ var require_denque = __commonJS({
           for (k = 0; k < i; k++) {
             temp[k] = this._list[this._head + k & this._capacityMask];
           }
-          if (count === 0) {
+          if (count2 === 0) {
             removed = [];
             if (i > 0) {
               this._head = this._head + i + len & this._capacityMask;
             }
           } else {
-            removed = this.remove(i, count);
+            removed = this.remove(i, count2);
             this._head = this._head + i + len & this._capacityMask;
           }
           while (arg_len > arguments_index) {
@@ -10199,18 +10203,18 @@ var require_denque = __commonJS({
             this.unshift(temp[k - 1]);
           }
         } else {
-          temp = new Array(size - (i + count));
+          temp = new Array(size - (i + count2));
           var leng = temp.length;
           for (k = 0; k < leng; k++) {
-            temp[k] = this._list[this._head + i + count + k & this._capacityMask];
+            temp[k] = this._list[this._head + i + count2 + k & this._capacityMask];
           }
-          if (count === 0) {
+          if (count2 === 0) {
             removed = [];
             if (i != size) {
               this._tail = this._head + i + len & this._capacityMask;
             }
           } else {
-            removed = this.remove(i, count);
+            removed = this.remove(i, count2);
             this._tail = this._tail - leng + len & this._capacityMask;
           }
           while (arguments_index < arg_len) {
@@ -10222,7 +10226,7 @@ var require_denque = __commonJS({
         }
         return removed;
       } else {
-        return this.remove(i, count);
+        return this.remove(i, count2);
       }
     };
     Denque.prototype.clear = function clear() {
@@ -26610,9 +26614,9 @@ var require_pool_connection2 = __commonJS({
     "use strict";
     var Connection = require_connection3();
     var PoolConnection = class extends Connection {
-      constructor(pool, options) {
+      constructor(pool2, options) {
         super(options);
-        this._pool = pool;
+        this._pool = pool2;
         this._released = false;
         this.lastActiveTime = Date.now();
         this.once("end", () => {
@@ -26660,9 +26664,9 @@ var require_pool_connection2 = __commonJS({
         if (!this._pool || this._pool._closed) {
           return;
         }
-        const pool = this._pool;
+        const pool2 = this._pool;
         this._pool = null;
-        pool._removeConnection(this);
+        pool2._removeConnection(this);
       }
       promise(promiseImpl) {
         const PromisePoolConnection = require_pool_connection();
@@ -26985,11 +26989,11 @@ var require_pool2 = __commonJS({
     var inheritEvents = require_inherit_events();
     var BasePool = require_pool();
     var PromisePool = class _PromisePool extends EventEmitter {
-      constructor(pool, thePromise) {
+      constructor(pool2, thePromise) {
         super();
-        this.pool = pool;
+        this.pool = pool2;
         this.Promise = thePromise || Promise;
-        inheritEvents(pool, this, ["acquire", "connection", "enqueue", "release"]);
+        inheritEvents(pool2, this, ["acquire", "connection", "enqueue", "release"]);
       }
       getConnection() {
         const corePool = this.pool;
@@ -33472,8 +33476,9 @@ var init_schema2 = __esm({
       unionId: varchar("unionId", { length: 255 }).notNull().unique(),
       name: varchar("name", { length: 255 }),
       email: varchar("email", { length: 320 }),
-      avatar: text("avatar"),
+      avatar: mediumtext("avatar"),
       bio: text("bio"),
+      banner: mediumtext("banner"),
       role: mysqlEnum("role", ["user", "admin"]).default("user").notNull(),
       createdAt: timestamp("createdAt").defaultNow().notNull(),
       updatedAt: timestamp("updatedAt").defaultNow().notNull().$onUpdate(() => /* @__PURE__ */ new Date()),
@@ -33486,6 +33491,8 @@ var init_schema2 = __esm({
       code: text("code"),
       codeLanguage: varchar("codeLanguage", { length: 50 }),
       tags: varchar("tags", { length: 500 }),
+      mediaUrl: text("mediaUrl"),
+      mediaType: varchar("mediaType", { length: 10 }),
       likesCount: int("likesCount").default(0).notNull(),
       commentsCount: int("commentsCount").default(0).notNull(),
       repostsCount: int("repostsCount").default(0).notNull(),
@@ -33536,21 +33543,60 @@ var init_relations2 = __esm({
 // server/queries/connection.ts
 function getDb() {
   if (!instance) {
-    instance = drizzle(env.databaseUrl, {
-      mode: "planetscale",
+    if (!env.databaseUrl) {
+      throw new Error("DATABASE_URL is not set");
+    }
+    const url2 = new URL(env.databaseUrl);
+    const dbName = url2.pathname.slice(1) || "defaultdb";
+    const isAiven = url2.hostname.includes("aivencloud");
+    const needsSsl = url2.searchParams.get("ssl-mode") === "REQUIRED" || isAiven || env.isProduction;
+    pool = import_promise.default.createPool({
+      host: url2.hostname,
+      user: url2.username,
+      password: url2.password,
+      database: dbName,
+      port: parseInt(url2.port, 10) || 3306,
+      ssl: needsSsl ? { rejectUnauthorized: false } : void 0
+    });
+    instance = drizzle(pool, {
+      mode: "default",
       schema: fullSchema
     });
+    migrationReady = (async () => {
+      const run2 = async (sql2) => {
+        try {
+          await pool.execute(sql2);
+        } catch (e) {
+          const errno = e.errno;
+          if (errno !== 1060 && errno !== 1061) console.warn("[migrate]", e.message);
+        }
+      };
+      await run2("ALTER TABLE users ADD COLUMN banner MEDIUMTEXT");
+      await run2("ALTER TABLE users MODIFY COLUMN banner MEDIUMTEXT");
+      await run2("ALTER TABLE users MODIFY COLUMN avatar MEDIUMTEXT");
+      await run2("ALTER TABLE posts ADD COLUMN mediaUrl TEXT");
+      await run2("ALTER TABLE posts ADD COLUMN mediaType VARCHAR(10)");
+      await run2(`CREATE TABLE IF NOT EXISTS follows (
+        id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+        followerId BIGINT UNSIGNED NOT NULL,
+        followingId BIGINT UNSIGNED NOT NULL,
+        createdAt TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        UNIQUE KEY follows_follower_following_idx (followerId, followingId)
+      )`);
+    })();
   }
   return instance;
 }
-var fullSchema, instance;
+var import_promise, fullSchema, instance, pool, migrationReady;
 var init_connection = __esm({
   "server/queries/connection.ts"() {
     init_mysql2();
+    import_promise = __toESM(require_promise(), 1);
     init_env();
     init_schema2();
     init_relations2();
     fullSchema = { ...schema_exports, ...relations_exports };
+    migrationReady = Promise.resolve();
   }
 });
 
@@ -33566,6 +33612,8 @@ async function listPosts() {
     code: posts.code,
     codeLanguage: posts.codeLanguage,
     tags: posts.tags,
+    mediaUrl: posts.mediaUrl,
+    mediaType: posts.mediaType,
     likesCount: posts.likesCount,
     commentsCount: posts.commentsCount,
     repostsCount: posts.repostsCount,
@@ -33574,6 +33622,28 @@ async function listPosts() {
     authorName: users.name,
     authorAvatar: users.avatar
   }).from(posts).leftJoin(users, eq(posts.userId, users.id)).orderBy(desc(posts.createdAt));
+}
+async function listPostsByUser(userId) {
+  if (isMock) {
+    return [...mockPosts].filter((p) => p.userId === userId).sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime()).map(({ userId: _uid, ...row }) => row);
+  }
+  const db = getDb();
+  return db.select({
+    id: posts.id,
+    content: posts.content,
+    code: posts.code,
+    codeLanguage: posts.codeLanguage,
+    tags: posts.tags,
+    mediaUrl: posts.mediaUrl,
+    mediaType: posts.mediaType,
+    likesCount: posts.likesCount,
+    commentsCount: posts.commentsCount,
+    repostsCount: posts.repostsCount,
+    createdAt: posts.createdAt,
+    authorId: posts.userId,
+    authorName: users.name,
+    authorAvatar: users.avatar
+  }).from(posts).leftJoin(users, eq(posts.userId, users.id)).where(eq(posts.userId, userId)).orderBy(desc(posts.createdAt));
 }
 async function createPost(data) {
   if (isMock) {
@@ -33585,6 +33655,8 @@ async function createPost(data) {
       code: data.code,
       codeLanguage: data.codeLanguage,
       tags: data.tags,
+      mediaUrl: data.mediaUrl,
+      mediaType: data.mediaType,
       likesCount: 0,
       commentsCount: 0,
       repostsCount: 0,
@@ -33601,7 +33673,9 @@ async function createPost(data) {
     content: data.content,
     code: data.code,
     codeLanguage: data.codeLanguage,
-    tags: data.tags
+    tags: data.tags,
+    mediaUrl: data.mediaUrl,
+    mediaType: data.mediaType
   });
   return { id: result.insertId };
 }
@@ -33662,6 +33736,8 @@ var init_posts = __esm({
         code: null,
         codeLanguage: null,
         tags: "trpc,react,typescript",
+        mediaUrl: null,
+        mediaType: null,
         likesCount: 5,
         commentsCount: 1,
         repostsCount: 3,
@@ -33683,6 +33759,8 @@ async function fetchUser(id: string): Promise<Result<User>> {
 }`,
         codeLanguage: "typescript",
         tags: "typescript,patterns",
+        mediaUrl: null,
+        mediaType: null,
         likesCount: 18,
         commentsCount: 2,
         repostsCount: 7,
@@ -33703,6 +33781,8 @@ async function fetchUser(id: string): Promise<Result<User>> {
 }`,
         codeLanguage: "css",
         tags: "css,webdev",
+        mediaUrl: null,
+        mediaType: null,
         likesCount: 9,
         commentsCount: 0,
         repostsCount: 2,
@@ -37702,8 +37782,8 @@ var init_az = __esm({
 });
 
 // node_modules/zod/v4/locales/be.js
-function getBelarusianPlural(count, one, few, many) {
-  const absCount = Math.abs(count);
+function getBelarusianPlural(count2, one, few, many) {
+  const absCount = Math.abs(count2);
   const lastDigit = absCount % 10;
   const lastTwoDigits = absCount % 100;
   if (lastTwoDigits >= 11 && lastTwoDigits <= 19) {
@@ -39617,8 +39697,8 @@ var init_hu = __esm({
 });
 
 // node_modules/zod/v4/locales/hy.js
-function getArmenianPlural(count, one, many) {
-  return Math.abs(count) === 1 ? one : many;
+function getArmenianPlural(count2, one, many) {
+  return Math.abs(count2) === 1 ? one : many;
 }
 function withDefiniteArticle(word) {
   if (!word)
@@ -41733,8 +41813,8 @@ var init_pt = __esm({
 });
 
 // node_modules/zod/v4/locales/ru.js
-function getRussianPlural(count, one, few, many) {
-  const absCount = Math.abs(count);
+function getRussianPlural(count2, one, few, many) {
+  const absCount = Math.abs(count2);
   const lastDigit = absCount % 10;
   const lastTwoDigits = absCount % 100;
   if (lastTwoDigits >= 11 && lastTwoDigits <= 19) {
@@ -48033,7 +48113,7 @@ var init_zod = __esm({
 });
 
 // contracts/schemas.ts
-var createPostSchema, toggleLikeSchema, isLikedSchema, deletePostSchema, listCommentsSchema, createCommentSchema, deleteCommentSchema, toggleRepostSchema, toggleFollowSchema, isFollowingSchema;
+var createPostSchema, toggleLikeSchema, isLikedSchema, deletePostSchema, listCommentsSchema, createCommentSchema, deleteCommentSchema, toggleRepostSchema, toggleFollowSchema, isFollowingSchema, getUserProfileSchema, listPostsByUserSchema, updateProfileSchema;
 var init_schemas3 = __esm({
   "contracts/schemas.ts"() {
     init_zod();
@@ -48041,7 +48121,9 @@ var init_schemas3 = __esm({
       content: external_exports.string().min(1).max(2e3),
       code: external_exports.string().max(5e3).optional(),
       codeLanguage: external_exports.string().max(50).optional(),
-      tags: external_exports.string().max(500).optional()
+      tags: external_exports.string().max(500).optional(),
+      mediaUrl: external_exports.string().url().optional(),
+      mediaType: external_exports.enum(["image", "video"]).optional()
     });
     toggleLikeSchema = external_exports.object({ postId: external_exports.number().int() });
     isLikedSchema = external_exports.object({ postId: external_exports.number().int() });
@@ -48055,6 +48137,14 @@ var init_schemas3 = __esm({
     toggleRepostSchema = external_exports.object({ postId: external_exports.number().int() });
     toggleFollowSchema = external_exports.object({ followingId: external_exports.number().int() });
     isFollowingSchema = external_exports.object({ followingId: external_exports.number().int() });
+    getUserProfileSchema = external_exports.object({ userId: external_exports.number().int() });
+    listPostsByUserSchema = external_exports.object({ userId: external_exports.number().int() });
+    updateProfileSchema = external_exports.object({
+      name: external_exports.string().min(1).max(255).optional(),
+      bio: external_exports.string().max(500).optional(),
+      avatar: external_exports.string().max(6e5).optional(),
+      banner: external_exports.string().max(2e6).optional()
+    });
   }
 });
 
@@ -48067,6 +48157,9 @@ var init_posts_router = __esm({
     init_schemas3();
     postsRouter = createRouter({
       list: publicQuery.query(() => listPosts()),
+      listByUser: publicQuery.input(listPostsByUserSchema).query(
+        ({ input }) => listPostsByUser(input.userId)
+      ),
       create: authedQuery.input(createPostSchema).mutation(
         ({ ctx, input }) => createPost({
           userId: ctx.user.id,
@@ -48074,6 +48167,8 @@ var init_posts_router = __esm({
           code: input.code ?? null,
           codeLanguage: input.codeLanguage ?? null,
           tags: input.tags ?? null,
+          mediaUrl: input.mediaUrl ?? null,
+          mediaType: input.mediaType ?? null,
           authorName: ctx.user.name ?? null,
           authorAvatar: ctx.user.avatar ?? null
         })
@@ -48316,6 +48411,22 @@ async function listFollowing(followerId) {
   const rows = await db.select({ followingId: follows.followingId }).from(follows).where(eq(follows.followerId, followerId));
   return rows.map((r) => r.followingId);
 }
+async function getFollowerCount(userId) {
+  if (isMock4) {
+    return [...mockFollows].filter((k) => k.endsWith(`:${userId}`)).length;
+  }
+  const db = getDb();
+  const [row] = await db.select({ total: count() }).from(follows).where(eq(follows.followingId, userId));
+  return row?.total ?? 0;
+}
+async function getFollowingCount(userId) {
+  if (isMock4) {
+    return [...mockFollows].filter((k) => k.startsWith(`${userId}:`)).length;
+  }
+  const db = getDb();
+  const [row] = await db.select({ total: count() }).from(follows).where(eq(follows.followerId, userId));
+  return row?.total ?? 0;
+}
 var isMock4, mockFollows;
 var init_follows = __esm({
   "server/queries/follows.ts"() {
@@ -48348,6 +48459,123 @@ var init_follows_router = __esm({
   }
 });
 
+// server/queries/users.ts
+async function findUserByUnionId(unionId) {
+  if (isMock5) return mockUserByUnionId.get(unionId);
+  const rows = await getDb().select().from(users).where(eq(users.unionId, unionId)).limit(1);
+  return rows.at(0);
+}
+async function findUserById(id) {
+  if (isMock5) return mockUserById.get(id);
+  const rows = await getDb().select().from(users).where(eq(users.id, id)).limit(1);
+  return rows.at(0);
+}
+async function updateUserProfile(id, data) {
+  if (isMock5) {
+    const user = mockUserById.get(id);
+    if (user) {
+      const updated = { ...user, ...data, updatedAt: /* @__PURE__ */ new Date() };
+      mockUserById.set(id, updated);
+      mockUserByUnionId.set(user.unionId, updated);
+    }
+    return;
+  }
+  await getDb().update(users).set({ ...data }).where(eq(users.id, id));
+}
+async function upsertUser(data) {
+  if (isMock5) {
+    const existing = mockUserByUnionId.get(data.unionId);
+    const isOwner = data.unionId === env.ownerUnionId && !!env.ownerUnionId;
+    const user = existing ? { ...existing, ...data, updatedAt: /* @__PURE__ */ new Date(), lastSignInAt: data.lastSignInAt ?? /* @__PURE__ */ new Date() } : {
+      id: mockNextUserId++,
+      unionId: data.unionId,
+      name: data.name ?? null,
+      email: data.email ?? null,
+      avatar: data.avatar ?? null,
+      bio: data.bio ?? null,
+      role: isOwner ? "admin" : data.role ?? "user",
+      createdAt: data.createdAt ?? /* @__PURE__ */ new Date(),
+      updatedAt: data.updatedAt ?? /* @__PURE__ */ new Date(),
+      lastSignInAt: data.lastSignInAt ?? /* @__PURE__ */ new Date()
+    };
+    mockUserByUnionId.set(data.unionId, user);
+    mockUserById.set(user.id, user);
+    return;
+  }
+  const values = { ...data };
+  const updateSet = { lastSignInAt: /* @__PURE__ */ new Date(), ...data };
+  if (values.role === void 0 && values.unionId && values.unionId === env.ownerUnionId) {
+    values.role = "admin";
+    updateSet.role = "admin";
+  }
+  await getDb().insert(users).values(values).onDuplicateKeyUpdate({ set: updateSet });
+}
+var mockUserById, mockUserByUnionId, mockNextUserId, isMock5;
+var init_users = __esm({
+  "server/queries/users.ts"() {
+    init_drizzle_orm();
+    init_schema2();
+    init_connection();
+    init_env();
+    mockUserById = /* @__PURE__ */ new Map();
+    mockUserByUnionId = /* @__PURE__ */ new Map();
+    mockNextUserId = 5;
+    isMock5 = !env.databaseUrl;
+    if (isMock5) {
+      const seed = (u) => {
+        mockUserById.set(u.id, u);
+        mockUserByUnionId.set(u.unionId, u);
+      };
+      const ts = /* @__PURE__ */ new Date(0);
+      seed({ id: 1, unionId: "dev-user-local", name: "Dev User", email: null, avatar: null, bio: null, role: "user", createdAt: ts, updatedAt: ts, lastSignInAt: ts });
+      seed({ id: 2, unionId: "mock-alejandro", name: "Alejandro Marin", email: null, avatar: null, bio: null, role: "user", createdAt: ts, updatedAt: ts, lastSignInAt: ts });
+      seed({ id: 3, unionId: "mock-sofia", name: "Sofia Jimenez", email: null, avatar: null, bio: null, role: "user", createdAt: ts, updatedAt: ts, lastSignInAt: ts });
+      seed({ id: 4, unionId: "mock-carlos", name: "Carlos Rivera", email: null, avatar: null, bio: null, role: "user", createdAt: ts, updatedAt: ts, lastSignInAt: ts });
+    }
+  }
+});
+
+// server/users-router.ts
+var usersRouter;
+var init_users_router = __esm({
+  "server/users-router.ts"() {
+    init_dist2();
+    init_middleware();
+    init_schemas3();
+    init_users();
+    init_follows();
+    usersRouter = createRouter({
+      getProfile: publicQuery.input(getUserProfileSchema).query(async ({ input }) => {
+        const user = await findUserById(input.userId);
+        if (!user) throw new TRPCError({ code: "NOT_FOUND", message: "Usuario no encontrado" });
+        const [followerCount, followingCount] = await Promise.all([
+          getFollowerCount(input.userId),
+          getFollowingCount(input.userId)
+        ]);
+        return {
+          id: user.id,
+          name: user.name,
+          bio: user.bio,
+          avatar: user.avatar,
+          banner: user.banner,
+          createdAt: user.createdAt,
+          followerCount,
+          followingCount
+        };
+      }),
+      updateProfile: authedQuery.input(updateProfileSchema).mutation(async ({ ctx, input }) => {
+        await updateUserProfile(ctx.user.id, {
+          ...input.name !== void 0 ? { name: input.name } : {},
+          ...input.bio !== void 0 ? { bio: input.bio } : {},
+          ...input.avatar !== void 0 ? { avatar: input.avatar } : {},
+          ...input.banner !== void 0 ? { banner: input.banner } : {}
+        });
+        return { success: true };
+      })
+    });
+  }
+});
+
 // server/router.ts
 var appRouter;
 var init_router5 = __esm({
@@ -48357,6 +48585,7 @@ var init_router5 = __esm({
     init_comments_router();
     init_reposts_router();
     init_follows_router();
+    init_users_router();
     init_middleware();
     appRouter = createRouter({
       ping: publicQuery.query(() => ({ ok: true, ts: Date.now() })),
@@ -48364,7 +48593,8 @@ var init_router5 = __esm({
       posts: postsRouter,
       comments: commentsRouter,
       reposts: repostsRouter,
-      follows: followsRouter
+      follows: followsRouter,
+      users: usersRouter
     });
   }
 });
@@ -49965,65 +50195,6 @@ var init_platform = __esm({
   }
 });
 
-// server/queries/users.ts
-async function findUserByUnionId(unionId) {
-  if (isMock5) return mockUserByUnionId.get(unionId);
-  const rows = await getDb().select().from(users).where(eq(users.unionId, unionId)).limit(1);
-  return rows.at(0);
-}
-async function upsertUser(data) {
-  if (isMock5) {
-    const existing = mockUserByUnionId.get(data.unionId);
-    const isOwner = data.unionId === env.ownerUnionId && !!env.ownerUnionId;
-    const user = existing ? { ...existing, ...data, updatedAt: /* @__PURE__ */ new Date(), lastSignInAt: data.lastSignInAt ?? /* @__PURE__ */ new Date() } : {
-      id: mockNextUserId++,
-      unionId: data.unionId,
-      name: data.name ?? null,
-      email: data.email ?? null,
-      avatar: data.avatar ?? null,
-      bio: data.bio ?? null,
-      role: isOwner ? "admin" : data.role ?? "user",
-      createdAt: data.createdAt ?? /* @__PURE__ */ new Date(),
-      updatedAt: data.updatedAt ?? /* @__PURE__ */ new Date(),
-      lastSignInAt: data.lastSignInAt ?? /* @__PURE__ */ new Date()
-    };
-    mockUserByUnionId.set(data.unionId, user);
-    mockUserById.set(user.id, user);
-    return;
-  }
-  const values = { ...data };
-  const updateSet = { lastSignInAt: /* @__PURE__ */ new Date(), ...data };
-  if (values.role === void 0 && values.unionId && values.unionId === env.ownerUnionId) {
-    values.role = "admin";
-    updateSet.role = "admin";
-  }
-  await getDb().insert(users).values(values).onDuplicateKeyUpdate({ set: updateSet });
-}
-var mockUserById, mockUserByUnionId, mockNextUserId, isMock5;
-var init_users = __esm({
-  "server/queries/users.ts"() {
-    init_drizzle_orm();
-    init_schema2();
-    init_connection();
-    init_env();
-    mockUserById = /* @__PURE__ */ new Map();
-    mockUserByUnionId = /* @__PURE__ */ new Map();
-    mockNextUserId = 5;
-    isMock5 = !env.databaseUrl;
-    if (isMock5) {
-      const seed = (u) => {
-        mockUserById.set(u.id, u);
-        mockUserByUnionId.set(u.unionId, u);
-      };
-      const ts = /* @__PURE__ */ new Date(0);
-      seed({ id: 1, unionId: "dev-user-local", name: "Dev User", email: null, avatar: null, bio: null, role: "user", createdAt: ts, updatedAt: ts, lastSignInAt: ts });
-      seed({ id: 2, unionId: "mock-alejandro", name: "Alejandro Marin", email: null, avatar: null, bio: null, role: "user", createdAt: ts, updatedAt: ts, lastSignInAt: ts });
-      seed({ id: 3, unionId: "mock-sofia", name: "Sofia Jimenez", email: null, avatar: null, bio: null, role: "user", createdAt: ts, updatedAt: ts, lastSignInAt: ts });
-      seed({ id: 4, unionId: "mock-carlos", name: "Carlos Rivera", email: null, avatar: null, bio: null, role: "user", createdAt: ts, updatedAt: ts, lastSignInAt: ts });
-    }
-  }
-});
-
 // server/kimi/auth.ts
 async function exchangeAuthCode(code, redirectUri) {
   const body = new URLSearchParams({
@@ -50101,8 +50272,10 @@ function createOAuthCallbackHandler() {
       });
       return c.redirect("/#/app", 302);
     } catch (err) {
-      console.error("[OAuth] Google callback failed", err);
-      return c.json({ error: "OAuth callback failed" }, 500);
+      const cause = err instanceof Error ? err.message : String(err);
+      const rootCause = err instanceof Error && err.cause instanceof Error ? { message: err.cause.message, code: err.cause.code } : null;
+      console.error("[OAuth] Google callback failed:", cause, err);
+      return c.json({ error: "OAuth callback failed", cause, rootCause }, 500);
     }
   };
 }
@@ -50155,7 +50328,12 @@ var init_app = __esm({
     init_users();
     init_cookies();
     init_constants3();
+    init_connection();
     app = new Hono2();
+    app.use("/api/*", async (_c, next) => {
+      await migrationReady;
+      return next();
+    });
     app.get(Paths.oauthCallback, createOAuthCallbackHandler());
     if (!env.isProduction || !env.googleClientId) {
       app.get("/api/dev-login", async (c) => {

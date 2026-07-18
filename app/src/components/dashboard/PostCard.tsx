@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { useNavigate } from 'react-router';
 import { Heart, MessageCircle, Repeat2, Share2, Verified, Bookmark, Copy, Check } from 'lucide-react';
 import { trpc } from '@/providers/trpc';
 import { formatDate } from '@/lib/utils';
@@ -21,6 +22,7 @@ const LANG_COLORS: Record<string, string> = {
 };
 
 export default function PostCard({ post, addToast, isSaved = false, onToggleSave }: PostCardProps) {
+  const navigate = useNavigate();
   const [commentsOpen, setCommentsOpen] = useState(false);
   const [likesCount, setLikesCount] = useState(post.likesCount);
   const [isLiked, setIsLiked] = useState(false);
@@ -80,7 +82,7 @@ export default function PostCard({ post, addToast, isSaved = false, onToggleSave
     >
       <div className="flex items-start gap-3">
         {/* Avatar */}
-        <div className="relative shrink-0">
+        <div className="relative shrink-0 cursor-pointer" onClick={() => navigate(`/u/${post.authorId}`)}>
           {post.authorAvatar ? (
             <img src={post.authorAvatar} alt="" className="w-10 h-10 rounded-full object-cover ring-2 ring-transparent group-hover:ring-[#e1ff00]/20 transition-all" />
           ) : (
@@ -94,7 +96,10 @@ export default function PostCard({ post, addToast, isSaved = false, onToggleSave
         <div className="flex-1 min-w-0">
           {/* Header */}
           <div className="flex items-center gap-1.5 mb-2 flex-wrap">
-            <span className="text-[#f3f2f2] font-bold text-[15px] hover:underline cursor-pointer">{post.authorName ?? 'Developer'}</span>
+            <span
+              className="text-[#f3f2f2] font-bold text-[15px] hover:underline cursor-pointer"
+              onClick={() => navigate(`/u/${post.authorId}`)}
+            >{post.authorName ?? 'Developer'}</span>
             <Verified size={13} className="text-[#3B82F6] shrink-0" />
             <span className="text-[#3D4E68] text-sm font-mono">@{handle}</span>
             <span className="text-[#2A3347] text-sm">·</span>

@@ -1,9 +1,13 @@
 import { createRouter, publicQuery, authedQuery } from "./middleware";
-import { listPosts, createPost, toggleLike, isLiked, deletePost } from "./queries/posts";
-import { createPostSchema, toggleLikeSchema, isLikedSchema, deletePostSchema } from "@contracts/schemas";
+import { listPosts, listPostsByUser, createPost, toggleLike, isLiked, deletePost } from "./queries/posts";
+import { createPostSchema, toggleLikeSchema, isLikedSchema, deletePostSchema, listPostsByUserSchema } from "@contracts/schemas";
 
 export const postsRouter = createRouter({
   list: publicQuery.query(() => listPosts()),
+
+  listByUser: publicQuery.input(listPostsByUserSchema).query(({ input }) =>
+    listPostsByUser(input.userId)
+  ),
 
   create: authedQuery.input(createPostSchema).mutation(({ ctx, input }) =>
     createPost({

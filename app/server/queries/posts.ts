@@ -91,6 +91,37 @@ export async function listPosts(): Promise<PostRow[]> {
     .orderBy(desc(posts.createdAt));
 }
 
+export async function listPostsByUser(userId: number): Promise<PostRow[]> {
+  if (isMock) {
+    return [...mockPosts]
+      .filter((p) => p.userId === userId)
+      .sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime())
+      .map(({ userId: _uid, ...row }) => row);
+  }
+  const db = getDb();
+  return db
+    .select({
+      id: posts.id,
+      content: posts.content,
+      code: posts.code,
+      codeLanguage: posts.codeLanguage,
+      tags: posts.tags,
+      mediaUrl: posts.mediaUrl,
+      mediaType: posts.mediaType,
+      likesCount: posts.likesCount,
+      commentsCount: posts.commentsCount,
+      repostsCount: posts.repostsCount,
+      createdAt: posts.createdAt,
+      authorId: posts.userId,
+      authorName: users.name,
+      authorAvatar: users.avatar,
+    })
+    .from(posts)
+    .leftJoin(users, eq(posts.userId, users.id))
+    .where(eq(posts.userId, userId))
+    .orderBy(desc(posts.createdAt));
+}
+
 export async function createPost(data: {
   userId: number;
   content: string;
