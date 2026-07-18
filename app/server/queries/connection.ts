@@ -8,14 +8,8 @@ const fullSchema = { ...schema, ...relations };
 
 let instance: ReturnType<typeof drizzle<typeof fullSchema>>;
 let pool: mysql.Pool;
-let migrationRan = false;
 
-function runMigrationsOnce(p: mysql.Pool) {
-  if (migrationRan) return;
-  migrationRan = true;
-  p.execute("ALTER TABLE users ADD COLUMN IF NOT EXISTS banner TEXT")
-    .catch((err: Error) => console.warn("[migrate] banner column:", err.message));
-}
+export let migrationReady: Promise<void> = Promise.resolve();
 
 export function getDb() {
   if (!instance) {
@@ -42,7 +36,13 @@ export function getDb() {
       schema: fullSchema,
     });
 
-    runMigrationsOnce(pool);
+    migrationReady = pool
+      .execute("ALTER TABLE users ADD COLUMN banner TEXT")
+      .then(() => {})
+      .catch((err: { errno?: number; message: string }) => {
+        // errno 1060 = Duplicate column name — column already exists, which is fine
+        if (err.errno !== 1060) console.warn("[migrate] banner:", err.message);
+      });
   }
   return instance;
 }

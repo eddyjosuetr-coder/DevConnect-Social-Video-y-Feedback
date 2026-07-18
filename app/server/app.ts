@@ -10,8 +10,16 @@ import { signSessionToken } from "./kimi/session";
 import { upsertUser } from "./queries/users";
 import { getSessionCookieOptions } from "./lib/cookies";
 import { Paths, Session } from "@contracts/constants";
+import { migrationReady } from "./queries/connection";
 
 const app = new Hono<{ Bindings: HttpBindings }>();
+
+// Await schema migrations before any DB-bound request
+app.use("/api/*", async (_c, next) => {
+  await migrationReady;
+  return next();
+});
+
 app.get(Paths.oauthCallback, createOAuthCallbackHandler());
 
 if (!env.isProduction || !env.googleClientId) {
