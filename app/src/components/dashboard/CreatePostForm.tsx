@@ -62,33 +62,37 @@ interface ToolBtnProps {
 }
 
 function ToolBtn({ children, onClick, active = false, activeColor = '#e1ff00', disabled, title, badge }: ToolBtnProps) {
+  const INACTIVE = '#6B7FA8';
   return (
     <button
       onClick={onClick}
       disabled={disabled}
       title={title}
-      className="relative h-9 min-w-9 px-1 rounded-full flex items-center justify-center transition-all duration-150 focus:outline-none focus-visible:ring-2 focus-visible:ring-[#e1ff00]/40"
+      className="relative h-9 min-w-9 px-1.5 rounded-full flex items-center justify-center transition-all duration-150 focus:outline-none focus-visible:ring-2 focus-visible:ring-[#e1ff00]/40"
       style={{
-        color: active ? activeColor : '#3D4E68',
+        color: active ? activeColor : INACTIVE,
         backgroundColor: active ? `${activeColor}1A` : 'transparent',
+        border: badge ? `1.5px solid ${active ? activeColor : '#2A3347'}` : 'none',
       }}
       onMouseEnter={(e) => {
         if (!active && !disabled) {
           const el = e.currentTarget as HTMLElement;
           el.style.color = activeColor;
           el.style.backgroundColor = `${activeColor}12`;
+          if (badge) el.style.borderColor = activeColor;
         }
       }}
       onMouseLeave={(e) => {
         if (!active) {
           const el = e.currentTarget as HTMLElement;
-          el.style.color = '#3D4E68';
+          el.style.color = INACTIVE;
           el.style.backgroundColor = 'transparent';
+          if (badge) el.style.borderColor = '#2A3347';
         }
       }}
     >
       {badge ? (
-        <span className="text-[11px] font-black tracking-tight px-1">{badge}</span>
+        <span className="text-[12px] font-black tracking-wide">{badge}</span>
       ) : children}
     </button>
   );
