@@ -26,6 +26,11 @@ export const deleteCommentSchema = z.object({ commentId: z.number().int() });
 
 export const toggleRepostSchema = z.object({ postId: z.number().int() });
 
+export const sendMessageSchema    = z.object({ receiverId: z.number().int(), content: z.string().min(1).max(2000) });
+export const getThreadSchema      = z.object({ otherId: z.number().int() });
+export const markReadSchema       = z.object({ otherId: z.number().int() });
+export const searchUsersSchema    = z.object({ query: z.string().max(100) });
+
 export const toggleFollowSchema   = z.object({ followingId: z.number().int() });
 export const isFollowingSchema    = z.object({ followingId: z.number().int() });
 export const getUserProfileSchema = z.object({ userId: z.number().int() });

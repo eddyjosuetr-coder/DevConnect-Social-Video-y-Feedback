@@ -1,181 +1,352 @@
-import { useState } from 'react';
-import { Mail, Search, Send, X } from 'lucide-react';
+import { useState, useRef, useEffect } from 'react';
+import { Search, Send, ArrowLeft, MessageSquarePlus, UserCircle2 } from 'lucide-react';
+import { trpc } from '@/providers/trpc';
+import { useAuth } from '@/hooks/useAuth';
+import { useNavigate } from 'react-router';
+import { formatDate } from '@/lib/utils';
 
-type Conversation = {
-  id: number;
-  name: string;
-  handle: string;
-  lastMsg: string;
-  time: string;
-  img: string;
-  unread: number;
-  online: boolean;
-};
+// ── Avatar helper ─────────────────────────────────────────────────────────────
+function UserAvatar({ name, avatar, size = 40 }: { name: string | null; avatar: string | null; size?: number }) {
+  if (avatar) {
+    return <img src={avatar} alt="" className="rounded-full object-cover shrink-0" style={{ width: size, height: size }} />;
+  }
+  return (
+    <div
+      className="rounded-full bg-gradient-to-br from-[#e1ff00] to-[#00ffff] flex items-center justify-center text-[#050507] font-bold shrink-0"
+      style={{ width: size, height: size, fontSize: size * 0.36 }}
+    >
+      {(name ?? '?').charAt(0).toUpperCase()}
+    </div>
+  );
+}
 
-const DEMO_CONVERSATIONS: Conversation[] = [
-  { id: 1, name: 'Alejandro Marin', handle: '@alexmarin', lastMsg: 'Hey! Vi tu snippet de Rust, está increíble 🔥', time: 'Hace 3h', img: '/images/profile1.jpg', unread: 2, online: true },
-  { id: 2, name: 'Sofia Jimenez',   handle: '@sofiaj',    lastMsg: '¿Usas Zod para validación en tRPC?',          time: 'Ayer',     img: '/images/profile2.jpg', unread: 0, online: true },
-  { id: 3, name: 'Carlos Mendez',   handle: '@cmendez',   lastMsg: 'Excelente arquitectura, muy limpia',           time: 'Hace 2d',  img: '/images/profile5.jpg', unread: 0, online: false },
-  { id: 4, name: 'Yuki Tanaka',     handle: '@yukit',     lastMsg: 'Gracias por el feedback en el PR',             time: 'Hace 4d',  img: '/images/profile6.jpg', unread: 0, online: false },
-];
+// ── Thread View ───────────────────────────────────────────────────────────────
+function ThreadView({
+  partner,
+  currentUserId,
+  onBack,
+}: {
+  partner: { id: number; name: string | null; avatar: string | null };
+  currentUserId: number;
+  onBack: () => void;
+}) {
+  const [text, setText] = useState('');
+  const bottomRef = useRef<HTMLDivElement>(null);
+  const navigate = useNavigate();
 
-type ActiveConv = Conversation & { messages: { id: number; text: string; mine: boolean; time: string }[] };
+  const utils = trpc.useUtils();
 
-const MOCK_MESSAGES: Record<number, { id: number; text: string; mine: boolean; time: string }[]> = {
-  1: [
-    { id: 1, text: 'Hey! Vi tu snippet de Rust, está increíble 🔥', mine: false, time: '3:20pm' },
-    { id: 2, text: 'Jaja gracias! Llevo semanas aprendiendo ownership', mine: true, time: '3:21pm' },
-    { id: 3, text: '¿Tienes algún repo público donde pueda ver más?', mine: false, time: '3:22pm' },
-  ],
-  2: [
-    { id: 1, text: '¿Usas Zod para validación en tRPC?', mine: false, time: 'Ayer' },
-    { id: 2, text: 'Sí, exactamente. tRPC v11 ya la incluye built-in', mine: true, time: 'Ayer' },
-  ],
-  3: [{ id: 1, text: 'Excelente arquitectura, muy limpia', mine: false, time: 'Hace 2d' }],
-  4: [{ id: 1, text: 'Gracias por el feedback en el PR', mine: false, time: 'Hace 4d' }],
-};
-
-export default function MessagesTab() {
-  const [activeConv, setActiveConv] = useState<ActiveConv | null>(null);
-  const [newMsg, setNewMsg] = useState('');
-  const [search, setSearch] = useState('');
-
-  const filtered = DEMO_CONVERSATIONS.filter(
-    (c) =>
-      c.name.toLowerCase().includes(search.toLowerCase()) ||
-      c.handle.toLowerCase().includes(search.toLowerCase()),
+  const { data: thread = [], isLoading } = trpc.messages.thread.useQuery(
+    { otherId: partner.id },
+    { refetchInterval: 3000 }
   );
 
-  if (activeConv) {
-    return (
-      <div className="flex flex-col h-[calc(100vh-120px)]">
-        {/* Conv header */}
-        <div className="flex items-center gap-3 px-4 py-3 border-b border-[#2A3347] bg-[#050507]/80 backdrop-blur-sm">
-          <button
-            onClick={() => setActiveConv(null)}
-            className="text-[#5A6680] hover:text-[#f3f2f2] transition-colors p-1"
-          >
-            <X size={18} />
-          </button>
-          <div className="relative shrink-0">
-            <img src={activeConv.img} alt="" className="w-9 h-9 rounded-full object-cover" />
-            {activeConv.online && (
-              <div className="absolute -bottom-0.5 -right-0.5 w-3 h-3 rounded-full bg-[#22C55E] border-2 border-[#050507]" />
-            )}
-          </div>
-          <div>
-            <p className="text-[#f3f2f2] font-semibold text-sm">{activeConv.name}</p>
-            <p className="text-[#5A6680] text-xs">{activeConv.online ? 'En línea' : 'Desconectado'}</p>
-          </div>
-        </div>
+  const markRead = trpc.messages.markRead.useMutation({
+    onSuccess: () => utils.messages.conversations.invalidate(),
+  });
 
-        {/* Messages */}
-        <div className="flex-1 overflow-y-auto px-4 py-4 space-y-3">
-          {MOCK_MESSAGES[activeConv.id]?.map((m) => (
-            <div key={m.id} className={`flex ${m.mine ? 'justify-end' : 'justify-start'}`}>
-              <div
-                className={`max-w-[75%] px-4 py-2.5 rounded-2xl text-sm ${
-                  m.mine
-                    ? 'bg-[#e1ff00] text-[#050507] rounded-br-sm'
-                    : 'bg-[#1E2535] text-[#E2E8F0] rounded-bl-sm'
-                }`}
-              >
-                <p>{m.text}</p>
-                <p className={`text-[10px] mt-1 text-right ${m.mine ? 'text-[#050507]/50' : 'text-[#5A6680]'}`}>
-                  {m.time}
-                </p>
-              </div>
-            </div>
-          ))}
-        </div>
+  const sendMsg = trpc.messages.send.useMutation({
+    onSuccess: () => {
+      setText('');
+      void utils.messages.thread.invalidate({ otherId: partner.id });
+      void utils.messages.conversations.invalidate();
+    },
+  });
 
-        {/* Input */}
-        <div className="px-4 py-3 border-t border-[#2A3347]">
-          <div className="flex items-center gap-2 bg-[#151A27] border border-[#2A3347] rounded-xl px-4 py-2.5 focus-within:border-[#3B82F6] transition-colors">
-            <input
-              type="text"
-              value={newMsg}
-              onChange={(e) => setNewMsg(e.target.value)}
-              onKeyDown={(e) => { if (e.key === 'Enter' && newMsg.trim()) setNewMsg(''); }}
-              placeholder="Escribe un mensaje..."
-              className="flex-1 bg-transparent text-sm text-[#f3f2f2] outline-none placeholder:text-[#5A6680]"
-            />
-            <button
-              onClick={() => setNewMsg('')}
-              disabled={!newMsg.trim()}
-              className="text-[#e1ff00] disabled:text-[#2A3347] transition-colors"
-            >
-              <Send size={16} />
-            </button>
-          </div>
-          <p className="text-[9px] text-[#5A6680] text-center mt-2">
-            Los mensajes en tiempo real requieren Google OAuth + base de datos
-          </p>
-        </div>
-      </div>
-    );
+  // Mark as read when opening
+  useEffect(() => {
+    markRead.mutate({ otherId: partner.id });
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [partner.id]);
+
+  // Scroll to bottom on new messages
+  useEffect(() => {
+    bottomRef.current?.scrollIntoView({ behavior: 'smooth' });
+  }, [thread.length]);
+
+  function handleSend() {
+    const content = text.trim();
+    if (!content || sendMsg.isPending) return;
+    sendMsg.mutate({ receiverId: partner.id, content });
   }
 
   return (
-    <div>
-      <div className="px-4 pt-4 pb-3 border-b border-[#2A3347]">
-        <div className="relative">
-          <Search size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-[#5A6680]" />
+    <div className="flex flex-col h-[calc(100vh-120px)]">
+      {/* Header */}
+      <div className="flex items-center gap-3 px-4 py-3 border-b border-[#1E2535] sticky top-0 bg-[#060911]/95 backdrop-blur-sm z-10">
+        <button onClick={onBack} className="p-1.5 text-[#5A6680] hover:text-[#f3f2f2] transition-colors shrink-0">
+          <ArrowLeft size={18} />
+        </button>
+        <button
+          className="flex items-center gap-2.5 flex-1 min-w-0 text-left hover:opacity-80 transition-opacity"
+          onClick={() => navigate(`/u/${partner.id}`)}
+        >
+          <UserAvatar name={partner.name} avatar={partner.avatar} size={34} />
+          <div className="min-w-0">
+            <p className="text-[#f3f2f2] font-semibold text-sm leading-tight truncate">{partner.name ?? 'Usuario'}</p>
+            <p className="text-[#5A6680] text-xs font-mono truncate">
+              @{partner.name?.toLowerCase().replace(/\s+/g, '') ?? 'user'}
+            </p>
+          </div>
+        </button>
+        <button
+          onClick={() => navigate(`/u/${partner.id}`)}
+          className="p-1.5 text-[#3D4E68] hover:text-[#6B7FA8] transition-colors shrink-0"
+          title="Ver perfil"
+        >
+          <UserCircle2 size={18} />
+        </button>
+      </div>
+
+      {/* Messages */}
+      <div className="flex-1 overflow-y-auto px-4 py-4 space-y-2">
+        {isLoading && (
+          <div className="flex justify-center py-8">
+            <div className="w-6 h-6 rounded-full border-2 border-t-[#e1ff00] border-[#1E2535] animate-spin" />
+          </div>
+        )}
+
+        {!isLoading && thread.length === 0 && (
+          <div className="text-center py-12 text-[#3D4E68] text-sm">
+            Aún no hay mensajes. ¡Di hola!
+          </div>
+        )}
+
+        {thread.map((msg) => {
+          const mine = msg.senderId === currentUserId;
+          return (
+            <div key={msg.id} className={`flex ${mine ? 'justify-end' : 'justify-start'}`}>
+              {!mine && (
+                <div className="mr-2 mt-auto shrink-0">
+                  <UserAvatar name={partner.name} avatar={partner.avatar} size={28} />
+                </div>
+              )}
+              <div
+                className={`max-w-[72%] px-3.5 py-2.5 rounded-2xl text-sm leading-relaxed ${
+                  mine
+                    ? 'bg-[#e1ff00] text-[#050507] rounded-br-sm'
+                    : 'bg-[#111827] text-[#E2E8F0] rounded-bl-sm border border-[#1E2535]'
+                }`}
+              >
+                <p className="whitespace-pre-wrap break-words">{msg.content}</p>
+                <p className={`text-[10px] mt-1 text-right ${mine ? 'text-[#050507]/40' : 'text-[#5A6680]'}`}>
+                  {formatDate(msg.createdAt)}
+                </p>
+              </div>
+            </div>
+          );
+        })}
+        <div ref={bottomRef} />
+      </div>
+
+      {/* Input */}
+      <div className="px-4 py-3 border-t border-[#1E2535]">
+        <div
+          className="flex items-end gap-2 bg-[#0D1220] border border-[#1E2535] rounded-2xl px-4 py-2.5 transition-colors"
+          style={{ borderColor: text ? '#3B82F6' : undefined }}
+        >
+          <textarea
+            rows={1}
+            value={text}
+            onChange={(e) => setText(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); handleSend(); }
+            }}
+            placeholder={`Mensaje a ${partner.name ?? 'usuario'}…`}
+            className="flex-1 bg-transparent text-sm text-[#f3f2f2] outline-none placeholder:text-[#3D4E68] resize-none"
+            style={{ maxHeight: 120 }}
+          />
+          <button
+            onClick={handleSend}
+            disabled={!text.trim() || sendMsg.isPending}
+            className="shrink-0 p-1.5 rounded-lg transition-all disabled:opacity-30"
+            style={{ color: text.trim() ? '#e1ff00' : '#3D4E68' }}
+          >
+            <Send size={16} />
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ── New Conversation Picker ───────────────────────────────────────────────────
+function NewConvPicker({ onSelect, onClose }: {
+  onSelect: (user: { id: number; name: string | null; avatar: string | null }) => void;
+  onClose: () => void;
+}) {
+  const [query, setQuery] = useState('');
+  const { data: results = [] } = trpc.users.search.useQuery(
+    { query },
+    { enabled: query.length >= 1 }
+  );
+
+  return (
+    <div className="absolute inset-0 z-20 bg-[#060911] flex flex-col">
+      <div className="flex items-center gap-3 px-4 py-3 border-b border-[#1E2535]">
+        <button onClick={onClose} className="p-1.5 text-[#5A6680] hover:text-[#f3f2f2] transition-colors">
+          <ArrowLeft size={18} />
+        </button>
+        <div className="relative flex-1">
+          <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-[#3D4E68]" />
           <input
+            autoFocus
             type="text"
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            placeholder="Buscar conversaciones..."
-            className="w-full bg-[#151A27] border border-[#2A3347] text-[#f3f2f2] pl-9 pr-4 py-2.5 text-sm outline-none focus:border-[#3B82F6] transition-colors placeholder:text-[#5A6680] rounded-xl"
+            value={query}
+            onChange={(e) => setQuery(e.target.value)}
+            placeholder="Buscar usuario por nombre…"
+            className="w-full bg-[#0D1220] border border-[#1E2535] focus:border-[#3B82F6] text-[#f3f2f2] pl-9 pr-4 py-2 text-sm outline-none rounded-xl transition-colors placeholder:text-[#3D4E68]"
           />
         </div>
       </div>
 
-      {filtered.map((c) => (
-        <button
-          key={c.id}
-          onClick={() => setActiveConv({ ...c, messages: MOCK_MESSAGES[c.id] ?? [] })}
-          className="w-full flex items-start gap-3 px-4 py-4 border-b border-[#2A3347] hover:bg-[#151A27]/50 cursor-pointer transition-colors text-left"
-        >
-          <div className="relative shrink-0">
-            <img src={c.img} alt="" className="w-11 h-11 rounded-full object-cover" />
-            {c.online && (
-              <div className="absolute -bottom-0.5 -right-0.5 w-3.5 h-3.5 rounded-full bg-[#22C55E] border-2 border-[#050507]" />
-            )}
+      <div className="flex-1 overflow-y-auto">
+        {query.length < 1 && (
+          <div className="text-center py-12 text-[#3D4E68] text-sm">
+            Escribe un nombre para buscar
           </div>
-          <div className="flex-1 min-w-0">
-            <div className="flex items-center justify-between">
-              <span className={`text-sm ${c.unread > 0 ? 'text-[#f3f2f2] font-bold' : 'text-[#f3f2f2] font-semibold'}`}>
-                {c.name}
-              </span>
-              <span className="text-xs text-[#5A6680] shrink-0 ml-2">{c.time}</span>
+        )}
+        {results.map((u) => (
+          <button
+            key={u.id}
+            onClick={() => onSelect(u)}
+            className="w-full flex items-center gap-3 px-4 py-3.5 border-b border-[#0F1520] hover:bg-[#0D1220] transition-colors text-left"
+          >
+            <UserAvatar name={u.name} avatar={u.avatar} size={40} />
+            <div>
+              <p className="text-[#f3f2f2] font-semibold text-sm">{u.name ?? 'Usuario'}</p>
+              <p className="text-[#5A6680] text-xs font-mono">
+                @{u.name?.toLowerCase().replace(/\s+/g, '') ?? 'user'}
+              </p>
             </div>
-            <p className={`text-xs mt-0.5 truncate ${c.unread > 0 ? 'text-[#E2E8F0]' : 'text-[#8B9AB0]'}`}>
-              {c.lastMsg}
-            </p>
-          </div>
-          {c.unread > 0 && (
-            <div className="w-5 h-5 rounded-full bg-[#e1ff00] flex items-center justify-center shrink-0 mt-0.5">
-              <span className="text-[#050507] text-[10px] font-bold">{c.unread}</span>
-            </div>
-          )}
-        </button>
-      ))}
+          </button>
+        ))}
+        {query.length >= 1 && results.length === 0 && (
+          <p className="text-center text-[#5A6680] text-sm py-10">Sin resultados</p>
+        )}
+      </div>
+    </div>
+  );
+}
 
-      {filtered.length === 0 && (
-        <div className="text-center py-12 px-4">
-          <p className="text-[#5A6680] text-sm">No se encontraron conversaciones</p>
-        </div>
+// ── MessagesTab (main) ────────────────────────────────────────────────────────
+export default function MessagesTab() {
+  const { user: me } = useAuth();
+  const [partner, setPartner] = useState<{ id: number; name: string | null; avatar: string | null } | null>(null);
+  const [showNewConv, setShowNewConv] = useState(false);
+  const [search, setSearch] = useState('');
+
+  const { data: conversations = [], isLoading } = trpc.messages.conversations.useQuery(
+    undefined,
+    { refetchInterval: 5000, enabled: !!me }
+  );
+
+  if (!me) {
+    return (
+      <div className="flex flex-col items-center justify-center py-20 gap-3 text-[#5A6680]">
+        <MessageSquarePlus size={36} />
+        <p className="text-sm">Inicia sesión para ver tus mensajes</p>
+      </div>
+    );
+  }
+
+  if (partner) {
+    return (
+      <ThreadView
+        partner={partner}
+        currentUserId={me.id}
+        onBack={() => setPartner(null)}
+      />
+    );
+  }
+
+  const filtered = conversations.filter((c) =>
+    (c.partnerName ?? '').toLowerCase().includes(search.toLowerCase())
+  );
+
+  return (
+    <div className="relative flex flex-col">
+      {showNewConv && (
+        <NewConvPicker
+          onSelect={(u) => { setPartner(u); setShowNewConv(false); }}
+          onClose={() => setShowNewConv(false)}
+        />
       )}
 
-      <div className="text-center py-10 px-4">
-        <div className="w-14 h-14 bg-[#151A27] rounded-full flex items-center justify-center mx-auto mb-4">
-          <Mail size={22} className="text-[#5A6680]" />
+      {/* Search + new button */}
+      <div className="px-4 pt-4 pb-3 border-b border-[#1E2535] flex gap-2">
+        <div className="relative flex-1">
+          <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-[#3D4E68]" />
+          <input
+            type="text"
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            placeholder="Buscar conversaciones…"
+            className="w-full bg-[#0D1220] border border-[#1E2535] focus:border-[#3B82F6] text-[#f3f2f2] pl-9 pr-4 py-2 text-sm outline-none rounded-xl transition-colors placeholder:text-[#3D4E68]"
+          />
         </div>
-        <p className="text-[#8B9AB0] text-sm leading-relaxed">
-          Los mensajes reales estarán disponibles con Google OAuth conectado.
-        </p>
+        <button
+          onClick={() => setShowNewConv(true)}
+          title="Nuevo mensaje"
+          className="p-2.5 rounded-xl border border-[#1E2535] text-[#e1ff00] hover:bg-[#e1ff00]/8 transition-all shrink-0"
+        >
+          <MessageSquarePlus size={16} />
+        </button>
       </div>
+
+      {/* Conversation list */}
+      {isLoading ? (
+        <div className="flex justify-center py-12">
+          <div className="w-6 h-6 rounded-full border-2 border-t-[#e1ff00] border-[#1E2535] animate-spin" />
+        </div>
+      ) : filtered.length === 0 && conversations.length === 0 ? (
+        <div className="flex flex-col items-center justify-center py-16 gap-4 px-6">
+          <div className="w-16 h-16 rounded-2xl bg-[#0D1220] border border-[#1E2535] flex items-center justify-center">
+            <MessageSquarePlus size={28} className="text-[#e1ff00] opacity-60" />
+          </div>
+          <div className="text-center">
+            <p className="text-[#f3f2f2] font-semibold text-sm">No tienes mensajes aún</p>
+            <p className="text-[#5A6680] text-xs mt-1">Busca a alguien y empieza a chatear</p>
+          </div>
+          <button
+            onClick={() => setShowNewConv(true)}
+            className="px-5 py-2 rounded-full text-sm font-semibold bg-[#e1ff00] text-[#050507]"
+            style={{ boxShadow: '0 0 16px rgba(225,255,0,0.25)' }}
+          >
+            Nuevo mensaje
+          </button>
+        </div>
+      ) : filtered.length === 0 ? (
+        <p className="text-center text-[#5A6680] text-sm py-10">Sin resultados</p>
+      ) : (
+        filtered.map((c) => (
+          <button
+            key={c.partnerId}
+            onClick={() => setPartner({ id: c.partnerId, name: c.partnerName, avatar: c.partnerAvatar })}
+            className="w-full flex items-start gap-3 px-4 py-4 border-b border-[#0F1520] hover:bg-[#0A0F1A] transition-colors text-left"
+          >
+            <div className="relative shrink-0">
+              <UserAvatar name={c.partnerName} avatar={c.partnerAvatar} size={44} />
+              {c.unreadCount > 0 && (
+                <span className="absolute -top-0.5 -right-0.5 w-4 h-4 rounded-full bg-[#e1ff00] border-2 border-[#060911] flex items-center justify-center">
+                  <span className="text-[8px] font-black text-[#050507]">{c.unreadCount}</span>
+                </span>
+              )}
+            </div>
+            <div className="flex-1 min-w-0">
+              <div className="flex items-center justify-between gap-2">
+                <span className={`text-sm font-semibold truncate ${c.unreadCount > 0 ? 'text-[#f3f2f2]' : 'text-[#C9D5E8]'}`}>
+                  {c.partnerName ?? 'Usuario'}
+                </span>
+                <span className="text-[10px] text-[#3D4E68] shrink-0">{formatDate(c.lastAt)}</span>
+              </div>
+              <p className={`text-xs mt-0.5 truncate ${c.unreadCount > 0 ? 'text-[#A8BCCF]' : 'text-[#5A6680]'}`}>
+                {c.lastSenderId === me.id ? 'Tú: ' : ''}{c.lastContent}
+              </p>
+            </div>
+          </button>
+        ))
+      )}
     </div>
   );
 }

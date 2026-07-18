@@ -1,4 +1,4 @@
-import { eq } from "drizzle-orm";
+import { eq, like } from "drizzle-orm";
 import * as schema from "@db/schema";
 import type { InsertUser, User } from "@db/schema";
 import { getDb } from "./connection";
@@ -60,6 +60,22 @@ export async function updateUserProfile(
     .update(schema.users)
     .set({ ...data })
     .where(eq(schema.users.id, id));
+}
+
+export async function searchUsers(query: string): Promise<Array<{ id: number; name: string | null; avatar: string | null }>> {
+  if (!query.trim()) return [];
+  if (isMock) {
+    return [...mockUserById.values()]
+      .filter((u) => u.name?.toLowerCase().includes(query.toLowerCase()))
+      .slice(0, 10)
+      .map((u) => ({ id: u.id, name: u.name, avatar: u.avatar }));
+  }
+  const db = getDb();
+  return db
+    .select({ id: schema.users.id, name: schema.users.name, avatar: schema.users.avatar })
+    .from(schema.users)
+    .where(like(schema.users.name, `%${query}%`))
+    .limit(10);
 }
 
 export async function upsertUser(data: InsertUser): Promise<void> {

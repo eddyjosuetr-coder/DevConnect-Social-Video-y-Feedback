@@ -33462,12 +33462,13 @@ var schema_exports = {};
 __export(schema_exports, {
   comments: () => comments,
   follows: () => follows,
+  messages: () => messages,
   postLikes: () => postLikes,
   posts: () => posts,
   reposts: () => reposts,
   users: () => users
 });
-var users, posts, postLikes, comments, reposts, follows;
+var users, posts, postLikes, comments, reposts, messages, follows;
 var init_schema2 = __esm({
   "db/schema.ts"() {
     init_mysql_core();
@@ -33522,6 +33523,14 @@ var init_schema2 = __esm({
     }, (table) => ({
       userPostUnique: uniqueIndex("reposts_user_post_idx").on(table.postId, table.userId)
     }));
+    messages = mysqlTable("messages", {
+      id: serial("id").primaryKey(),
+      senderId: bigint("senderId", { mode: "number", unsigned: true }).notNull(),
+      receiverId: bigint("receiverId", { mode: "number", unsigned: true }).notNull(),
+      content: text("content").notNull(),
+      readAt: timestamp("readAt"),
+      createdAt: timestamp("createdAt").defaultNow().notNull()
+    });
     follows = mysqlTable("follows", {
       id: serial("id").primaryKey(),
       followerId: bigint("followerId", { mode: "number", unsigned: true }).notNull(),
@@ -33576,6 +33585,16 @@ function getDb() {
       await run2("ALTER TABLE users MODIFY COLUMN avatar MEDIUMTEXT");
       await run2("ALTER TABLE posts ADD COLUMN mediaUrl TEXT");
       await run2("ALTER TABLE posts ADD COLUMN mediaType VARCHAR(10)");
+      await run2(`CREATE TABLE IF NOT EXISTS messages (
+        id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+        senderId BIGINT UNSIGNED NOT NULL,
+        receiverId BIGINT UNSIGNED NOT NULL,
+        content TEXT NOT NULL,
+        readAt TIMESTAMP NULL,
+        createdAt TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        INDEX messages_sender_idx (senderId),
+        INDEX messages_receiver_idx (receiverId)
+      )`);
       await run2(`CREATE TABLE IF NOT EXISTS follows (
         id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
         followerId BIGINT UNSIGNED NOT NULL,
@@ -48113,7 +48132,7 @@ var init_zod = __esm({
 });
 
 // contracts/schemas.ts
-var createPostSchema, toggleLikeSchema, isLikedSchema, deletePostSchema, listCommentsSchema, createCommentSchema, deleteCommentSchema, toggleRepostSchema, toggleFollowSchema, isFollowingSchema, getUserProfileSchema, listPostsByUserSchema, updateProfileSchema;
+var createPostSchema, toggleLikeSchema, isLikedSchema, deletePostSchema, listCommentsSchema, createCommentSchema, deleteCommentSchema, toggleRepostSchema, sendMessageSchema, getThreadSchema, markReadSchema, searchUsersSchema, toggleFollowSchema, isFollowingSchema, getUserProfileSchema, listPostsByUserSchema, updateProfileSchema;
 var init_schemas3 = __esm({
   "contracts/schemas.ts"() {
     init_zod();
@@ -48135,6 +48154,10 @@ var init_schemas3 = __esm({
     });
     deleteCommentSchema = external_exports.object({ commentId: external_exports.number().int() });
     toggleRepostSchema = external_exports.object({ postId: external_exports.number().int() });
+    sendMessageSchema = external_exports.object({ receiverId: external_exports.number().int(), content: external_exports.string().min(1).max(2e3) });
+    getThreadSchema = external_exports.object({ otherId: external_exports.number().int() });
+    markReadSchema = external_exports.object({ otherId: external_exports.number().int() });
+    searchUsersSchema = external_exports.object({ query: external_exports.string().max(100) });
     toggleFollowSchema = external_exports.object({ followingId: external_exports.number().int() });
     isFollowingSchema = external_exports.object({ followingId: external_exports.number().int() });
     getUserProfileSchema = external_exports.object({ userId: external_exports.number().int() });
@@ -48482,6 +48505,14 @@ async function updateUserProfile(id, data) {
   }
   await getDb().update(users).set({ ...data }).where(eq(users.id, id));
 }
+async function searchUsers(query) {
+  if (!query.trim()) return [];
+  if (isMock5) {
+    return [...mockUserById.values()].filter((u) => u.name?.toLowerCase().includes(query.toLowerCase())).slice(0, 10).map((u) => ({ id: u.id, name: u.name, avatar: u.avatar }));
+  }
+  const db = getDb();
+  return db.select({ id: users.id, name: users.name, avatar: users.avatar }).from(users).where(like(users.name, `%${query}%`)).limit(10);
+}
 async function upsertUser(data) {
   if (isMock5) {
     const existing = mockUserByUnionId.get(data.unionId);
@@ -48563,6 +48594,9 @@ var init_users_router = __esm({
           followingCount
         };
       }),
+      search: publicQuery.input(searchUsersSchema).query(
+        ({ input }) => searchUsers(input.query)
+      ),
       updateProfile: authedQuery.input(updateProfileSchema).mutation(async ({ ctx, input }) => {
         await updateUserProfile(ctx.user.id, {
           ...input.name !== void 0 ? { name: input.name } : {},
@@ -48572,6 +48606,138 @@ var init_users_router = __esm({
         });
         return { success: true };
       })
+    });
+  }
+});
+
+// server/queries/messages.ts
+async function sendMessage(senderId, receiverId, content) {
+  if (isMock6) {
+    const id = nextMsgId++;
+    mockMessages.push({ id, senderId, receiverId, content, readAt: null, createdAt: /* @__PURE__ */ new Date() });
+    return { id };
+  }
+  const db = getDb();
+  const [result] = await db.insert(messages).values({ senderId, receiverId, content });
+  return { id: result.insertId };
+}
+async function getThread(userId, otherId, limit = 60) {
+  if (isMock6) {
+    return mockMessages.filter(
+      (m) => m.senderId === userId && m.receiverId === otherId || m.senderId === otherId && m.receiverId === userId
+    ).sort((a, b) => a.createdAt.getTime() - b.createdAt.getTime()).slice(-limit);
+  }
+  const db = getDb();
+  const rows = await db.select().from(messages).where(
+    or(
+      and(eq(messages.senderId, userId), eq(messages.receiverId, otherId)),
+      and(eq(messages.senderId, otherId), eq(messages.receiverId, userId))
+    )
+  ).orderBy(desc(messages.createdAt)).limit(limit);
+  return rows.reverse();
+}
+async function getConversations(userId) {
+  if (isMock6) {
+    const involved = mockMessages.filter(
+      (m) => m.senderId === userId || m.receiverId === userId
+    );
+    const convMap2 = /* @__PURE__ */ new Map();
+    for (const msg of involved.sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime())) {
+      const partnerId = msg.senderId === userId ? msg.receiverId : msg.senderId;
+      if (!convMap2.has(partnerId)) convMap2.set(partnerId, { lastMsg: msg, unread: 0 });
+      if (msg.receiverId === userId && msg.readAt === null) convMap2.get(partnerId).unread++;
+    }
+    return [...convMap2.entries()].map(([partnerId, { lastMsg, unread }]) => {
+      const u = mockUserById.get(partnerId);
+      return {
+        partnerId,
+        partnerName: u?.name ?? null,
+        partnerAvatar: u?.avatar ?? null,
+        lastContent: lastMsg.content,
+        lastAt: lastMsg.createdAt,
+        lastSenderId: lastMsg.senderId,
+        unreadCount: unread
+      };
+    });
+  }
+  const db = getDb();
+  const rows = await db.select().from(messages).where(or(eq(messages.senderId, userId), eq(messages.receiverId, userId))).orderBy(desc(messages.createdAt)).limit(500);
+  const convMap = /* @__PURE__ */ new Map();
+  for (const msg of rows) {
+    const partnerId = msg.senderId === userId ? msg.receiverId : msg.senderId;
+    if (!convMap.has(partnerId)) convMap.set(partnerId, { lastMsg: msg, unread: 0 });
+    if (msg.receiverId === userId && msg.readAt === null) convMap.get(partnerId).unread++;
+  }
+  if (convMap.size === 0) return [];
+  const partnerIds = [...convMap.keys()];
+  const partners = await db.select({ id: users.id, name: users.name, avatar: users.avatar }).from(users).where(inArray(users.id, partnerIds));
+  return partners.map((u) => {
+    const conv = convMap.get(u.id);
+    return {
+      partnerId: u.id,
+      partnerName: u.name,
+      partnerAvatar: u.avatar,
+      lastContent: conv.lastMsg.content,
+      lastAt: conv.lastMsg.createdAt,
+      lastSenderId: conv.lastMsg.senderId,
+      unreadCount: conv.unread
+    };
+  }).sort((a, b) => b.lastAt.getTime() - a.lastAt.getTime());
+}
+async function markRead(userId, otherId) {
+  if (isMock6) {
+    mockMessages.filter((m) => m.senderId === otherId && m.receiverId === userId && m.readAt === null).forEach((m) => {
+      m.readAt = /* @__PURE__ */ new Date();
+    });
+    return;
+  }
+  const db = getDb();
+  await db.update(messages).set({ readAt: /* @__PURE__ */ new Date() }).where(and(eq(messages.senderId, otherId), eq(messages.receiverId, userId), isNull2(messages.readAt)));
+}
+async function getTotalUnread(userId) {
+  if (isMock6) {
+    return mockMessages.filter((m) => m.receiverId === userId && m.readAt === null).length;
+  }
+  const db = getDb();
+  const rows = await db.select({ id: messages.id }).from(messages).where(and(eq(messages.receiverId, userId), isNull2(messages.readAt)));
+  return rows.length;
+}
+var isMock6, mockMessages, nextMsgId;
+var init_messages = __esm({
+  "server/queries/messages.ts"() {
+    init_drizzle_orm();
+    init_connection();
+    init_schema2();
+    init_users();
+    isMock6 = !process.env.DATABASE_URL;
+    mockMessages = [];
+    nextMsgId = 1;
+  }
+});
+
+// server/messages-router.ts
+var messagesRouter;
+var init_messages_router = __esm({
+  "server/messages-router.ts"() {
+    init_middleware();
+    init_schemas3();
+    init_messages();
+    messagesRouter = createRouter({
+      send: authedQuery.input(sendMessageSchema).mutation(
+        ({ ctx, input }) => sendMessage(ctx.user.id, input.receiverId, input.content)
+      ),
+      thread: authedQuery.input(getThreadSchema).query(
+        ({ ctx, input }) => getThread(ctx.user.id, input.otherId)
+      ),
+      conversations: authedQuery.query(
+        ({ ctx }) => getConversations(ctx.user.id)
+      ),
+      markRead: authedQuery.input(markReadSchema).mutation(
+        ({ ctx, input }) => markRead(ctx.user.id, input.otherId)
+      ),
+      totalUnread: authedQuery.query(
+        ({ ctx }) => getTotalUnread(ctx.user.id)
+      )
     });
   }
 });
@@ -48586,6 +48752,7 @@ var init_router5 = __esm({
     init_reposts_router();
     init_follows_router();
     init_users_router();
+    init_messages_router();
     init_middleware();
     appRouter = createRouter({
       ping: publicQuery.query(() => ({ ok: true, ts: Date.now() })),
@@ -48594,7 +48761,8 @@ var init_router5 = __esm({
       comments: commentsRouter,
       reposts: repostsRouter,
       follows: followsRouter,
-      users: usersRouter
+      users: usersRouter,
+      messages: messagesRouter
     });
   }
 });

@@ -49,6 +49,16 @@ export function getDb() {
       await run("ALTER TABLE users MODIFY COLUMN avatar MEDIUMTEXT");
       await run("ALTER TABLE posts ADD COLUMN mediaUrl TEXT");
       await run("ALTER TABLE posts ADD COLUMN mediaType VARCHAR(10)");
+      await run(`CREATE TABLE IF NOT EXISTS messages (
+        id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+        senderId BIGINT UNSIGNED NOT NULL,
+        receiverId BIGINT UNSIGNED NOT NULL,
+        content TEXT NOT NULL,
+        readAt TIMESTAMP NULL,
+        createdAt TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        INDEX messages_sender_idx (senderId),
+        INDEX messages_receiver_idx (receiverId)
+      )`);
       await run(`CREATE TABLE IF NOT EXISTS follows (
         id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
         followerId BIGINT UNSIGNED NOT NULL,

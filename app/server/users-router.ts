@@ -1,7 +1,7 @@
 import { TRPCError } from "@trpc/server";
 import { createRouter, publicQuery, authedQuery } from "./middleware";
-import { updateProfileSchema, getUserProfileSchema } from "@contracts/schemas";
-import { updateUserProfile, findUserById } from "./queries/users";
+import { updateProfileSchema, getUserProfileSchema, searchUsersSchema } from "@contracts/schemas";
+import { updateUserProfile, findUserById, searchUsers } from "./queries/users";
 import { getFollowerCount, getFollowingCount } from "./queries/follows";
 
 export const usersRouter = createRouter({
@@ -23,6 +23,10 @@ export const usersRouter = createRouter({
       followingCount,
     };
   }),
+
+  search: publicQuery.input(searchUsersSchema).query(({ input }) =>
+    searchUsers(input.query)
+  ),
 
   updateProfile: authedQuery
     .input(updateProfileSchema)

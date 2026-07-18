@@ -74,6 +74,17 @@ export const reposts = mysqlTable("reposts", {
   userPostUnique: uniqueIndex("reposts_user_post_idx").on(table.postId, table.userId),
 }));
 
+// ── Messages ──
+export const messages = mysqlTable("messages", {
+  id: serial("id").primaryKey(),
+  senderId: bigint("senderId", { mode: "number", unsigned: true }).notNull(),
+  receiverId: bigint("receiverId", { mode: "number", unsigned: true }).notNull(),
+  content: text("content").notNull(),
+  readAt: timestamp("readAt"),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+});
+export type Message = typeof messages.$inferSelect;
+
 // ── Follows ──
 export const follows = mysqlTable("follows", {
   id: serial("id").primaryKey(),
