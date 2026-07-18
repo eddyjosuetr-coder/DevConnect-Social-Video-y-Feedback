@@ -33520,6 +33520,7 @@ var init_schema2 = __esm({
       id: serial("id").primaryKey(),
       postId: bigint("postId", { mode: "number", unsigned: true }).notNull(),
       userId: bigint("userId", { mode: "number", unsigned: true }).notNull(),
+      quoteText: text("quoteText"),
       createdAt: timestamp("createdAt").defaultNow().notNull()
     }, (table) => ({
       userPostUnique: uniqueIndex("reposts_user_post_idx").on(table.postId, table.userId)
@@ -33616,6 +33617,7 @@ function getDb() {
         INDEX notif_recipient_idx (recipientId),
         INDEX notif_actor_idx (actorId)
       )`);
+      await run2("ALTER TABLE reposts ADD COLUMN quoteText TEXT");
       await run2(`CREATE TABLE IF NOT EXISTS follows (
         id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
         followerId BIGINT UNSIGNED NOT NULL,
@@ -48155,7 +48157,7 @@ var init_zod = __esm({
 });
 
 // contracts/schemas.ts
-var createPostSchema, toggleLikeSchema, isLikedSchema, deletePostSchema, listCommentsSchema, createCommentSchema, deleteCommentSchema, toggleRepostSchema, sendMessageSchema, getThreadSchema, markReadSchema, searchUsersSchema, toggleFollowSchema, isFollowingSchema, getUserProfileSchema, listPostsByUserSchema, updateProfileSchema;
+var createPostSchema, toggleLikeSchema, isLikedSchema, deletePostSchema, listCommentsSchema, createCommentSchema, deleteCommentSchema, toggleRepostSchema, quoteRepostSchema, listRepostsByUserSchema, sendMessageSchema, getThreadSchema, markReadSchema, searchUsersSchema, toggleFollowSchema, isFollowingSchema, getUserProfileSchema, listPostsByUserSchema, updateProfileSchema;
 var init_schemas3 = __esm({
   "contracts/schemas.ts"() {
     init_zod();
@@ -48177,6 +48179,11 @@ var init_schemas3 = __esm({
     });
     deleteCommentSchema = external_exports.object({ commentId: external_exports.number().int() });
     toggleRepostSchema = external_exports.object({ postId: external_exports.number().int() });
+    quoteRepostSchema = external_exports.object({
+      postId: external_exports.number().int(),
+      quoteText: external_exports.string().min(1).max(1e3)
+    });
+    listRepostsByUserSchema = external_exports.object({ userId: external_exports.number().int() });
     sendMessageSchema = external_exports.object({ receiverId: external_exports.number().int(), content: external_exports.string().min(1).max(2e3) });
     getThreadSchema = external_exports.object({ otherId: external_exports.number().int() });
     markReadSchema = external_exports.object({ otherId: external_exports.number().int() });
@@ -48537,15 +48544,15 @@ var init_comments_router = __esm({
 // server/queries/reposts.ts
 async function toggleRepost(postId, userId) {
   if (isMock5) {
-    const key = `${userId}:${postId}`;
     const post = mockPosts.find((p) => p.id === postId);
     if (!post) return { reposted: false, postOwnerId: null };
-    if (mockReposts.has(key)) {
-      mockReposts.delete(key);
+    const idx = mockReposts.findIndex((r) => r.userId === userId && r.postId === postId);
+    if (idx >= 0) {
+      mockReposts.splice(idx, 1);
       post.repostsCount = Math.max(0, post.repostsCount - 1);
       return { reposted: false, postOwnerId: post.userId };
     }
-    mockReposts.add(key);
+    mockReposts.push({ id: mockRepostId++, userId, postId, quoteText: null, createdAt: /* @__PURE__ */ new Date() });
     post.repostsCount += 1;
     return { reposted: true, postOwnerId: post.userId };
   }
@@ -48562,13 +48569,108 @@ async function toggleRepost(postId, userId) {
   await db.update(posts).set({ repostsCount: sql`${posts.repostsCount} + 1` }).where(eq(posts.id, postId));
   return { reposted: true, postOwnerId };
 }
+async function quoteRepost(postId, userId, quoteText) {
+  if (isMock5) {
+    const post = mockPosts.find((p) => p.id === postId);
+    if (!post) return { postOwnerId: null };
+    const idx = mockReposts.findIndex((r) => r.userId === userId && r.postId === postId);
+    if (idx >= 0) {
+      mockReposts[idx] = { ...mockReposts[idx], quoteText };
+    } else {
+      mockReposts.push({ id: mockRepostId++, userId, postId, quoteText, createdAt: /* @__PURE__ */ new Date() });
+      post.repostsCount += 1;
+    }
+    return { postOwnerId: post.userId };
+  }
+  const db = getDb();
+  const [postRow] = await db.select({ userId: posts.userId }).from(posts).where(eq(posts.id, postId)).limit(1);
+  const postOwnerId = postRow?.userId ?? null;
+  const existing = await db.select().from(reposts).where(and(eq(reposts.postId, postId), eq(reposts.userId, userId))).limit(1);
+  if (existing.length > 0) {
+    await db.update(reposts).set({ quoteText }).where(eq(reposts.id, existing[0].id));
+  } else {
+    await db.insert(reposts).values({ postId, userId, quoteText });
+    await db.update(posts).set({ repostsCount: sql`${posts.repostsCount} + 1` }).where(eq(posts.id, postId));
+  }
+  return { postOwnerId };
+}
 async function isReposted(postId, userId) {
-  if (isMock5) return mockReposts.has(`${userId}:${postId}`);
+  if (isMock5) return mockReposts.some((r) => r.userId === userId && r.postId === postId);
   const db = getDb();
   const existing = await db.select().from(reposts).where(and(eq(reposts.postId, postId), eq(reposts.userId, userId))).limit(1);
   return existing.length > 0;
 }
-var isMock5, mockReposts;
+async function listRepostsByUser(userId) {
+  if (isMock5) {
+    return mockReposts.filter((r) => r.userId === userId).sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime()).map((r) => {
+      const post = mockPosts.find((p) => p.id === r.postId);
+      if (!post) return null;
+      return {
+        repostId: r.id,
+        repostCreatedAt: r.createdAt,
+        quoteText: r.quoteText,
+        post: {
+          id: post.id,
+          content: post.content,
+          code: post.code,
+          codeLanguage: post.codeLanguage,
+          tags: post.tags,
+          mediaUrl: post.mediaUrl,
+          mediaType: post.mediaType,
+          likesCount: post.likesCount,
+          commentsCount: post.commentsCount,
+          repostsCount: post.repostsCount,
+          createdAt: post.createdAt,
+          authorId: post.authorId,
+          authorName: post.authorName,
+          authorAvatar: post.authorAvatar
+        }
+      };
+    }).filter((r) => r !== null);
+  }
+  const db = getDb();
+  const rows = await db.select({
+    repostId: reposts.id,
+    repostCreatedAt: reposts.createdAt,
+    quoteText: reposts.quoteText,
+    postId: posts.id,
+    content: posts.content,
+    code: posts.code,
+    codeLanguage: posts.codeLanguage,
+    tags: posts.tags,
+    mediaUrl: posts.mediaUrl,
+    mediaType: posts.mediaType,
+    likesCount: posts.likesCount,
+    commentsCount: posts.commentsCount,
+    repostsCount: posts.repostsCount,
+    postCreatedAt: posts.createdAt,
+    authorId: users.id,
+    authorName: users.name,
+    authorAvatar: users.avatar
+  }).from(reposts).innerJoin(posts, eq(reposts.postId, posts.id)).innerJoin(users, eq(posts.userId, users.id)).where(eq(reposts.userId, userId)).orderBy(desc(reposts.createdAt));
+  return rows.map((r) => ({
+    repostId: r.repostId,
+    repostCreatedAt: r.repostCreatedAt,
+    quoteText: r.quoteText,
+    post: {
+      id: r.postId,
+      content: r.content,
+      code: r.code,
+      codeLanguage: r.codeLanguage,
+      tags: r.tags,
+      mediaUrl: r.mediaUrl,
+      mediaType: r.mediaType,
+      likesCount: r.likesCount,
+      commentsCount: r.commentsCount,
+      repostsCount: r.repostsCount,
+      createdAt: r.postCreatedAt,
+      authorId: r.authorId,
+      authorName: r.authorName,
+      authorAvatar: r.authorAvatar
+    }
+  }));
+}
+var isMock5, mockReposts, mockRepostId;
 var init_reposts = __esm({
   "server/queries/reposts.ts"() {
     init_drizzle_orm();
@@ -48576,7 +48678,8 @@ var init_reposts = __esm({
     init_schema2();
     init_posts();
     isMock5 = !process.env.DATABASE_URL;
-    mockReposts = /* @__PURE__ */ new Set();
+    mockReposts = [];
+    mockRepostId = 100;
   }
 });
 
@@ -48598,6 +48701,16 @@ var init_reposts_router = __esm({
       }),
       isReposted: authedQuery.input(toggleRepostSchema).query(
         ({ ctx, input }) => isReposted(input.postId, ctx.user.id)
+      ),
+      quote: authedQuery.input(quoteRepostSchema).mutation(async ({ ctx, input }) => {
+        const result = await quoteRepost(input.postId, ctx.user.id, input.quoteText);
+        if (result.postOwnerId) {
+          void createNotification(ctx.user.id, result.postOwnerId, "repost", input.postId);
+        }
+        return result;
+      }),
+      listByUser: publicQuery.input(listRepostsByUserSchema).query(
+        ({ input }) => listRepostsByUser(input.userId)
       )
     });
   }
