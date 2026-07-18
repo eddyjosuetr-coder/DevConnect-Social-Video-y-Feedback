@@ -71,7 +71,7 @@ export async function createComment(data: {
   content: string;
   authorName: string | null;
   authorAvatar: string | null;
-}): Promise<{ success: boolean }> {
+}): Promise<{ success: boolean; postOwnerId: number | null }> {
   if (isMock) {
     const id = nextCommentId++;
     mockComments.push({
@@ -82,12 +82,13 @@ export async function createComment(data: {
     });
     const post = mockPosts.find((p) => p.id === data.postId);
     if (post) post.commentsCount += 1;
-    return { success: true };
+    return { success: true, postOwnerId: post?.userId ?? null };
   }
   const db = getDb();
+  const [postRow] = await db.select({ userId: posts.userId }).from(posts).where(eq(posts.id, data.postId)).limit(1);
   await db.insert(comments).values({ postId: data.postId, userId: data.userId, content: data.content });
   await db.update(posts).set({ commentsCount: sql`${posts.commentsCount} + 1` }).where(eq(posts.id, data.postId));
-  return { success: true };
+  return { success: true, postOwnerId: postRow?.userId ?? null };
 }
 
 export async function deleteComment(commentId: number, userId: number): Promise<{ success: boolean }> {

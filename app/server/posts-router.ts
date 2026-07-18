@@ -1,6 +1,7 @@
 import { createRouter, publicQuery, authedQuery } from "./middleware";
 import { listPosts, listPostsByUser, createPost, toggleLike, isLiked, deletePost } from "./queries/posts";
 import { createPostSchema, toggleLikeSchema, isLikedSchema, deletePostSchema, listPostsByUserSchema } from "@contracts/schemas";
+import { createNotification } from "./queries/notifications";
 
 export const postsRouter = createRouter({
   list: publicQuery.query(() => listPosts()),
@@ -23,9 +24,13 @@ export const postsRouter = createRouter({
     })
   ),
 
-  toggleLike: authedQuery.input(toggleLikeSchema).mutation(({ ctx, input }) =>
-    toggleLike(input.postId, ctx.user.id)
-  ),
+  toggleLike: authedQuery.input(toggleLikeSchema).mutation(async ({ ctx, input }) => {
+    const result = await toggleLike(input.postId, ctx.user.id);
+    if (result.liked && result.postOwnerId) {
+      void createNotification(ctx.user.id, result.postOwnerId, "like", input.postId);
+    }
+    return result;
+  }),
 
   isLiked: authedQuery.input(isLikedSchema).query(({ ctx, input }) =>
     isLiked(input.postId, ctx.user.id)

@@ -59,6 +59,17 @@ export function getDb() {
         INDEX messages_sender_idx (senderId),
         INDEX messages_receiver_idx (receiverId)
       )`);
+      await run(`CREATE TABLE IF NOT EXISTS notifications (
+        id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+        recipientId BIGINT UNSIGNED NOT NULL,
+        actorId BIGINT UNSIGNED NOT NULL,
+        type ENUM('like','comment','repost','follow') NOT NULL,
+        postId BIGINT UNSIGNED NULL,
+        readAt TIMESTAMP NULL,
+        createdAt TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        INDEX notif_recipient_idx (recipientId),
+        INDEX notif_actor_idx (actorId)
+      )`);
       await run(`CREATE TABLE IF NOT EXISTS follows (
         id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
         followerId BIGINT UNSIGNED NOT NULL,

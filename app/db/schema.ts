@@ -85,6 +85,17 @@ export const messages = mysqlTable("messages", {
 });
 export type Message = typeof messages.$inferSelect;
 
+// ── Notifications ──
+export const notifications = mysqlTable("notifications", {
+  id: serial("id").primaryKey(),
+  recipientId: bigint("recipientId", { mode: "number", unsigned: true }).notNull(),
+  actorId: bigint("actorId", { mode: "number", unsigned: true }).notNull(),
+  type: mysqlEnum("type", ["like", "comment", "repost", "follow"]).notNull(),
+  postId: bigint("postId", { mode: "number", unsigned: true }),
+  readAt: timestamp("readAt"),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+});
+
 // ── Follows ──
 export const follows = mysqlTable("follows", {
   id: serial("id").primaryKey(),

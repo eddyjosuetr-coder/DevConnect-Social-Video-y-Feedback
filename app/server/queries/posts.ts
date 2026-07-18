@@ -158,21 +158,23 @@ export async function createPost(data: {
   return { id: result.insertId };
 }
 
-export async function toggleLike(postId: number, userId: number): Promise<{ liked: boolean }> {
+export async function toggleLike(postId: number, userId: number): Promise<{ liked: boolean; postOwnerId: number | null }> {
   if (isMock) {
     const key = `${userId}:${postId}`;
     const post = mockPosts.find((p) => p.id === postId);
-    if (!post) return { liked: false };
+    if (!post) return { liked: false, postOwnerId: null };
     if (mockLikes.has(key)) {
       mockLikes.delete(key);
       post.likesCount = Math.max(0, post.likesCount - 1);
-      return { liked: false };
+      return { liked: false, postOwnerId: post.userId };
     }
     mockLikes.add(key);
     post.likesCount += 1;
-    return { liked: true };
+    return { liked: true, postOwnerId: post.userId };
   }
   const db = getDb();
+  const [postRow] = await db.select({ userId: posts.userId }).from(posts).where(eq(posts.id, postId)).limit(1);
+  const postOwnerId = postRow?.userId ?? null;
   const existing = await db
     .select()
     .from(postLikes)
@@ -181,11 +183,11 @@ export async function toggleLike(postId: number, userId: number): Promise<{ like
   if (existing.length > 0) {
     await db.delete(postLikes).where(eq(postLikes.id, existing[0].id));
     await db.update(posts).set({ likesCount: sql`${posts.likesCount} - 1` }).where(eq(posts.id, postId));
-    return { liked: false };
+    return { liked: false, postOwnerId };
   }
   await db.insert(postLikes).values({ postId, userId });
   await db.update(posts).set({ likesCount: sql`${posts.likesCount} + 1` }).where(eq(posts.id, postId));
-  return { liked: true };
+  return { liked: true, postOwnerId };
 }
 
 export async function isLiked(postId: number, userId: number): Promise<boolean> {

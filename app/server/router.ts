@@ -5,6 +5,7 @@ import { repostsRouter } from "./reposts-router";
 import { followsRouter } from "./follows-router";
 import { usersRouter } from "./users-router";
 import { messagesRouter } from "./messages-router";
+import { notificationsRouter } from "./notifications-router";
 import { createRouter, publicQuery } from "./middleware";
 
 export const appRouter = createRouter({
@@ -16,6 +17,7 @@ export const appRouter = createRouter({
   follows: followsRouter,
   users: usersRouter,
   messages: messagesRouter,
+  notifications: notificationsRouter,
 });
 
 export type AppRouter = typeof appRouter;

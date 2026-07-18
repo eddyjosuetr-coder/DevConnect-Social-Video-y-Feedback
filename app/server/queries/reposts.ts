@@ -10,22 +10,25 @@ const mockReposts = new Set<string>(); // "userId:postId"
 export async function toggleRepost(
   postId: number,
   userId: number,
-): Promise<{ reposted: boolean }> {
+): Promise<{ reposted: boolean; postOwnerId: number | null }> {
   if (isMock) {
     const key = `${userId}:${postId}`;
     const post = mockPosts.find((p) => p.id === postId);
-    if (!post) return { reposted: false };
+    if (!post) return { reposted: false, postOwnerId: null };
     if (mockReposts.has(key)) {
       mockReposts.delete(key);
       post.repostsCount = Math.max(0, post.repostsCount - 1);
-      return { reposted: false };
+      return { reposted: false, postOwnerId: post.userId };
     }
     mockReposts.add(key);
     post.repostsCount += 1;
-    return { reposted: true };
+    return { reposted: true, postOwnerId: post.userId };
   }
 
   const db = getDb();
+  const [postRow] = await db.select({ userId: posts.userId }).from(posts).where(eq(posts.id, postId)).limit(1);
+  const postOwnerId = postRow?.userId ?? null;
+
   const existing = await db
     .select()
     .from(reposts)
@@ -38,7 +41,7 @@ export async function toggleRepost(
       .update(posts)
       .set({ repostsCount: sql`GREATEST(0, ${posts.repostsCount} - 1)` })
       .where(eq(posts.id, postId));
-    return { reposted: false };
+    return { reposted: false, postOwnerId };
   }
 
   await db.insert(reposts).values({ postId, userId });
@@ -46,7 +49,7 @@ export async function toggleRepost(
     .update(posts)
     .set({ repostsCount: sql`${posts.repostsCount} + 1` })
     .where(eq(posts.id, postId));
-  return { reposted: true };
+  return { reposted: true, postOwnerId };
 }
 
 export async function isReposted(postId: number, userId: number): Promise<boolean> {

@@ -33463,12 +33463,13 @@ __export(schema_exports, {
   comments: () => comments,
   follows: () => follows,
   messages: () => messages,
+  notifications: () => notifications,
   postLikes: () => postLikes,
   posts: () => posts,
   reposts: () => reposts,
   users: () => users
 });
-var users, posts, postLikes, comments, reposts, messages, follows;
+var users, posts, postLikes, comments, reposts, messages, notifications, follows;
 var init_schema2 = __esm({
   "db/schema.ts"() {
     init_mysql_core();
@@ -33528,6 +33529,15 @@ var init_schema2 = __esm({
       senderId: bigint("senderId", { mode: "number", unsigned: true }).notNull(),
       receiverId: bigint("receiverId", { mode: "number", unsigned: true }).notNull(),
       content: text("content").notNull(),
+      readAt: timestamp("readAt"),
+      createdAt: timestamp("createdAt").defaultNow().notNull()
+    });
+    notifications = mysqlTable("notifications", {
+      id: serial("id").primaryKey(),
+      recipientId: bigint("recipientId", { mode: "number", unsigned: true }).notNull(),
+      actorId: bigint("actorId", { mode: "number", unsigned: true }).notNull(),
+      type: mysqlEnum("type", ["like", "comment", "repost", "follow"]).notNull(),
+      postId: bigint("postId", { mode: "number", unsigned: true }),
       readAt: timestamp("readAt"),
       createdAt: timestamp("createdAt").defaultNow().notNull()
     });
@@ -33594,6 +33604,17 @@ function getDb() {
         createdAt TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
         INDEX messages_sender_idx (senderId),
         INDEX messages_receiver_idx (receiverId)
+      )`);
+      await run2(`CREATE TABLE IF NOT EXISTS notifications (
+        id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+        recipientId BIGINT UNSIGNED NOT NULL,
+        actorId BIGINT UNSIGNED NOT NULL,
+        type ENUM('like','comment','repost','follow') NOT NULL,
+        postId BIGINT UNSIGNED NULL,
+        readAt TIMESTAMP NULL,
+        createdAt TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        INDEX notif_recipient_idx (recipientId),
+        INDEX notif_actor_idx (actorId)
       )`);
       await run2(`CREATE TABLE IF NOT EXISTS follows (
         id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
@@ -33702,26 +33723,28 @@ async function toggleLike(postId, userId) {
   if (isMock) {
     const key = `${userId}:${postId}`;
     const post = mockPosts.find((p) => p.id === postId);
-    if (!post) return { liked: false };
+    if (!post) return { liked: false, postOwnerId: null };
     if (mockLikes.has(key)) {
       mockLikes.delete(key);
       post.likesCount = Math.max(0, post.likesCount - 1);
-      return { liked: false };
+      return { liked: false, postOwnerId: post.userId };
     }
     mockLikes.add(key);
     post.likesCount += 1;
-    return { liked: true };
+    return { liked: true, postOwnerId: post.userId };
   }
   const db = getDb();
+  const [postRow] = await db.select({ userId: posts.userId }).from(posts).where(eq(posts.id, postId)).limit(1);
+  const postOwnerId = postRow?.userId ?? null;
   const existing = await db.select().from(postLikes).where(and(eq(postLikes.postId, postId), eq(postLikes.userId, userId))).limit(1);
   if (existing.length > 0) {
     await db.delete(postLikes).where(eq(postLikes.id, existing[0].id));
     await db.update(posts).set({ likesCount: sql`${posts.likesCount} - 1` }).where(eq(posts.id, postId));
-    return { liked: false };
+    return { liked: false, postOwnerId };
   }
   await db.insert(postLikes).values({ postId, userId });
   await db.update(posts).set({ likesCount: sql`${posts.likesCount} + 1` }).where(eq(posts.id, postId));
-  return { liked: true };
+  return { liked: true, postOwnerId };
 }
 async function isLiked(postId, userId) {
   if (isMock) return mockLikes.has(`${userId}:${postId}`);
@@ -48171,6 +48194,173 @@ var init_schemas3 = __esm({
   }
 });
 
+// server/queries/users.ts
+async function findUserByUnionId(unionId) {
+  if (isMock2) return mockUserByUnionId.get(unionId);
+  const rows = await getDb().select().from(users).where(eq(users.unionId, unionId)).limit(1);
+  return rows.at(0);
+}
+async function findUserById(id) {
+  if (isMock2) return mockUserById.get(id);
+  const rows = await getDb().select().from(users).where(eq(users.id, id)).limit(1);
+  return rows.at(0);
+}
+async function updateUserProfile(id, data) {
+  if (isMock2) {
+    const user = mockUserById.get(id);
+    if (user) {
+      const updated = { ...user, ...data, updatedAt: /* @__PURE__ */ new Date() };
+      mockUserById.set(id, updated);
+      mockUserByUnionId.set(user.unionId, updated);
+    }
+    return;
+  }
+  await getDb().update(users).set({ ...data }).where(eq(users.id, id));
+}
+async function searchUsers(query) {
+  if (!query.trim()) return [];
+  if (isMock2) {
+    return [...mockUserById.values()].filter((u) => u.name?.toLowerCase().includes(query.toLowerCase())).slice(0, 10).map((u) => ({ id: u.id, name: u.name, avatar: u.avatar }));
+  }
+  const db = getDb();
+  return db.select({ id: users.id, name: users.name, avatar: users.avatar }).from(users).where(like(users.name, `%${query}%`)).limit(10);
+}
+async function upsertUser(data) {
+  if (isMock2) {
+    const existing = mockUserByUnionId.get(data.unionId);
+    const isOwner = data.unionId === env.ownerUnionId && !!env.ownerUnionId;
+    const user = existing ? { ...existing, ...data, updatedAt: /* @__PURE__ */ new Date(), lastSignInAt: data.lastSignInAt ?? /* @__PURE__ */ new Date() } : {
+      id: mockNextUserId++,
+      unionId: data.unionId,
+      name: data.name ?? null,
+      email: data.email ?? null,
+      avatar: data.avatar ?? null,
+      bio: data.bio ?? null,
+      role: isOwner ? "admin" : data.role ?? "user",
+      createdAt: data.createdAt ?? /* @__PURE__ */ new Date(),
+      updatedAt: data.updatedAt ?? /* @__PURE__ */ new Date(),
+      lastSignInAt: data.lastSignInAt ?? /* @__PURE__ */ new Date()
+    };
+    mockUserByUnionId.set(data.unionId, user);
+    mockUserById.set(user.id, user);
+    return;
+  }
+  const values = { ...data };
+  const updateSet = { lastSignInAt: /* @__PURE__ */ new Date(), ...data };
+  if (values.role === void 0 && values.unionId && values.unionId === env.ownerUnionId) {
+    values.role = "admin";
+    updateSet.role = "admin";
+  }
+  await getDb().insert(users).values(values).onDuplicateKeyUpdate({ set: updateSet });
+}
+var mockUserById, mockUserByUnionId, mockNextUserId, isMock2;
+var init_users = __esm({
+  "server/queries/users.ts"() {
+    init_drizzle_orm();
+    init_schema2();
+    init_connection();
+    init_env();
+    mockUserById = /* @__PURE__ */ new Map();
+    mockUserByUnionId = /* @__PURE__ */ new Map();
+    mockNextUserId = 5;
+    isMock2 = !env.databaseUrl;
+    if (isMock2) {
+      const seed = (u) => {
+        mockUserById.set(u.id, u);
+        mockUserByUnionId.set(u.unionId, u);
+      };
+      const ts = /* @__PURE__ */ new Date(0);
+      seed({ id: 1, unionId: "dev-user-local", name: "Dev User", email: null, avatar: null, bio: null, role: "user", createdAt: ts, updatedAt: ts, lastSignInAt: ts });
+      seed({ id: 2, unionId: "mock-alejandro", name: "Alejandro Marin", email: null, avatar: null, bio: null, role: "user", createdAt: ts, updatedAt: ts, lastSignInAt: ts });
+      seed({ id: 3, unionId: "mock-sofia", name: "Sofia Jimenez", email: null, avatar: null, bio: null, role: "user", createdAt: ts, updatedAt: ts, lastSignInAt: ts });
+      seed({ id: 4, unionId: "mock-carlos", name: "Carlos Rivera", email: null, avatar: null, bio: null, role: "user", createdAt: ts, updatedAt: ts, lastSignInAt: ts });
+    }
+  }
+});
+
+// server/queries/notifications.ts
+async function createNotification(actorId, recipientId, type, postId) {
+  if (actorId === recipientId) return;
+  if (isMock3) {
+    mockNotifs.push({
+      id: nextNotifId++,
+      recipientId,
+      actorId,
+      type,
+      postId: postId ?? null,
+      readAt: null,
+      createdAt: /* @__PURE__ */ new Date()
+    });
+    return;
+  }
+  const db = getDb();
+  await db.insert(notifications).values({
+    recipientId,
+    actorId,
+    type,
+    postId: postId ?? null
+  });
+}
+async function listNotifications(userId) {
+  if (isMock3) {
+    return mockNotifs.filter((n) => n.recipientId === userId).sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime()).slice(0, 50).map((n) => {
+      const actor = mockUserById.get(n.actorId);
+      return {
+        id: n.id,
+        type: n.type,
+        postId: n.postId,
+        readAt: n.readAt,
+        createdAt: n.createdAt,
+        actorId: n.actorId,
+        actorName: actor?.name ?? null,
+        actorAvatar: actor?.avatar ?? null
+      };
+    });
+  }
+  const db = getDb();
+  const rows = await db.select({
+    id: notifications.id,
+    type: notifications.type,
+    postId: notifications.postId,
+    readAt: notifications.readAt,
+    createdAt: notifications.createdAt,
+    actorId: notifications.actorId,
+    actorName: users.name,
+    actorAvatar: users.avatar
+  }).from(notifications).leftJoin(users, eq(notifications.actorId, users.id)).where(eq(notifications.recipientId, userId)).orderBy(desc(notifications.createdAt)).limit(50);
+  return rows;
+}
+async function markAllRead(userId) {
+  if (isMock3) {
+    mockNotifs.filter((n) => n.recipientId === userId && n.readAt === null).forEach((n) => {
+      n.readAt = /* @__PURE__ */ new Date();
+    });
+    return;
+  }
+  const db = getDb();
+  await db.update(notifications).set({ readAt: /* @__PURE__ */ new Date() }).where(and(eq(notifications.recipientId, userId), isNull2(notifications.readAt)));
+}
+async function getUnreadNotifCount(userId) {
+  if (isMock3) {
+    return mockNotifs.filter((n) => n.recipientId === userId && n.readAt === null).length;
+  }
+  const db = getDb();
+  const rows = await db.select({ id: notifications.id }).from(notifications).where(and(eq(notifications.recipientId, userId), isNull2(notifications.readAt)));
+  return rows.length;
+}
+var isMock3, mockNotifs, nextNotifId;
+var init_notifications = __esm({
+  "server/queries/notifications.ts"() {
+    init_drizzle_orm();
+    init_connection();
+    init_schema2();
+    init_users();
+    isMock3 = !process.env.DATABASE_URL;
+    mockNotifs = [];
+    nextNotifId = 1;
+  }
+});
+
 // server/posts-router.ts
 var postsRouter;
 var init_posts_router = __esm({
@@ -48178,6 +48368,7 @@ var init_posts_router = __esm({
     init_middleware();
     init_posts();
     init_schemas3();
+    init_notifications();
     postsRouter = createRouter({
       list: publicQuery.query(() => listPosts()),
       listByUser: publicQuery.input(listPostsByUserSchema).query(
@@ -48196,9 +48387,13 @@ var init_posts_router = __esm({
           authorAvatar: ctx.user.avatar ?? null
         })
       ),
-      toggleLike: authedQuery.input(toggleLikeSchema).mutation(
-        ({ ctx, input }) => toggleLike(input.postId, ctx.user.id)
-      ),
+      toggleLike: authedQuery.input(toggleLikeSchema).mutation(async ({ ctx, input }) => {
+        const result = await toggleLike(input.postId, ctx.user.id);
+        if (result.liked && result.postOwnerId) {
+          void createNotification(ctx.user.id, result.postOwnerId, "like", input.postId);
+        }
+        return result;
+      }),
       isLiked: authedQuery.input(isLikedSchema).query(
         ({ ctx, input }) => isLiked(input.postId, ctx.user.id)
       ),
@@ -48211,7 +48406,7 @@ var init_posts_router = __esm({
 
 // server/queries/comments.ts
 async function listComments(postId) {
-  if (isMock2) {
+  if (isMock4) {
     return mockComments.filter((c) => c.postId === postId).sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime()).map(({ postId: _pid, userId: _uid, ...row }) => row);
   }
   const db = getDb();
@@ -48225,7 +48420,7 @@ async function listComments(postId) {
   }).from(comments).leftJoin(users, eq(comments.userId, users.id)).where(eq(comments.postId, postId)).orderBy(desc(comments.createdAt));
 }
 async function createComment(data) {
-  if (isMock2) {
+  if (isMock4) {
     const id = nextCommentId++;
     mockComments.push({
       id,
@@ -48239,15 +48434,16 @@ async function createComment(data) {
     });
     const post = mockPosts.find((p) => p.id === data.postId);
     if (post) post.commentsCount += 1;
-    return { success: true };
+    return { success: true, postOwnerId: post?.userId ?? null };
   }
   const db = getDb();
+  const [postRow] = await db.select({ userId: posts.userId }).from(posts).where(eq(posts.id, data.postId)).limit(1);
   await db.insert(comments).values({ postId: data.postId, userId: data.userId, content: data.content });
   await db.update(posts).set({ commentsCount: sql`${posts.commentsCount} + 1` }).where(eq(posts.id, data.postId));
-  return { success: true };
+  return { success: true, postOwnerId: postRow?.userId ?? null };
 }
 async function deleteComment(commentId, userId) {
-  if (isMock2) {
+  if (isMock4) {
     const idx = mockComments.findIndex((c) => c.id === commentId && c.userId === userId);
     if (idx === -1) return { success: false };
     const [removed] = mockComments.splice(idx, 1);
@@ -48262,7 +48458,7 @@ async function deleteComment(commentId, userId) {
   await db.update(posts).set({ commentsCount: sql`${posts.commentsCount} - 1` }).where(eq(posts.id, comment.postId));
   return { success: true };
 }
-var nextCommentId, mockComments, isMock2;
+var nextCommentId, mockComments, isMock4;
 var init_comments = __esm({
   "server/queries/comments.ts"() {
     init_drizzle_orm();
@@ -48302,7 +48498,7 @@ var init_comments = __esm({
         authorAvatar: null
       }
     ];
-    isMock2 = !process.env.DATABASE_URL;
+    isMock4 = !process.env.DATABASE_URL;
   }
 });
 
@@ -48313,19 +48509,24 @@ var init_comments_router = __esm({
     init_middleware();
     init_comments();
     init_schemas3();
+    init_notifications();
     commentsRouter = createRouter({
       list: publicQuery.input(listCommentsSchema).query(
         ({ input }) => listComments(input.postId)
       ),
-      create: authedQuery.input(createCommentSchema).mutation(
-        ({ ctx, input }) => createComment({
+      create: authedQuery.input(createCommentSchema).mutation(async ({ ctx, input }) => {
+        const result = await createComment({
           postId: input.postId,
           userId: ctx.user.id,
           content: input.content,
           authorName: ctx.user.name ?? null,
           authorAvatar: ctx.user.avatar ?? null
-        })
-      ),
+        });
+        if (result.postOwnerId) {
+          void createNotification(ctx.user.id, result.postOwnerId, "comment", input.postId);
+        }
+        return result;
+      }),
       delete: authedQuery.input(deleteCommentSchema).mutation(
         ({ ctx, input }) => deleteComment(input.commentId, ctx.user.id)
       )
@@ -48335,44 +48536,46 @@ var init_comments_router = __esm({
 
 // server/queries/reposts.ts
 async function toggleRepost(postId, userId) {
-  if (isMock3) {
+  if (isMock5) {
     const key = `${userId}:${postId}`;
     const post = mockPosts.find((p) => p.id === postId);
-    if (!post) return { reposted: false };
+    if (!post) return { reposted: false, postOwnerId: null };
     if (mockReposts.has(key)) {
       mockReposts.delete(key);
       post.repostsCount = Math.max(0, post.repostsCount - 1);
-      return { reposted: false };
+      return { reposted: false, postOwnerId: post.userId };
     }
     mockReposts.add(key);
     post.repostsCount += 1;
-    return { reposted: true };
+    return { reposted: true, postOwnerId: post.userId };
   }
   const db = getDb();
+  const [postRow] = await db.select({ userId: posts.userId }).from(posts).where(eq(posts.id, postId)).limit(1);
+  const postOwnerId = postRow?.userId ?? null;
   const existing = await db.select().from(reposts).where(and(eq(reposts.postId, postId), eq(reposts.userId, userId))).limit(1);
   if (existing.length > 0) {
     await db.delete(reposts).where(eq(reposts.id, existing[0].id));
     await db.update(posts).set({ repostsCount: sql`GREATEST(0, ${posts.repostsCount} - 1)` }).where(eq(posts.id, postId));
-    return { reposted: false };
+    return { reposted: false, postOwnerId };
   }
   await db.insert(reposts).values({ postId, userId });
   await db.update(posts).set({ repostsCount: sql`${posts.repostsCount} + 1` }).where(eq(posts.id, postId));
-  return { reposted: true };
+  return { reposted: true, postOwnerId };
 }
 async function isReposted(postId, userId) {
-  if (isMock3) return mockReposts.has(`${userId}:${postId}`);
+  if (isMock5) return mockReposts.has(`${userId}:${postId}`);
   const db = getDb();
   const existing = await db.select().from(reposts).where(and(eq(reposts.postId, postId), eq(reposts.userId, userId))).limit(1);
   return existing.length > 0;
 }
-var isMock3, mockReposts;
+var isMock5, mockReposts;
 var init_reposts = __esm({
   "server/queries/reposts.ts"() {
     init_drizzle_orm();
     init_connection();
     init_schema2();
     init_posts();
-    isMock3 = !process.env.DATABASE_URL;
+    isMock5 = !process.env.DATABASE_URL;
     mockReposts = /* @__PURE__ */ new Set();
   }
 });
@@ -48384,10 +48587,15 @@ var init_reposts_router = __esm({
     init_middleware();
     init_reposts();
     init_schemas3();
+    init_notifications();
     repostsRouter = createRouter({
-      toggle: authedQuery.input(toggleRepostSchema).mutation(
-        ({ ctx, input }) => toggleRepost(input.postId, ctx.user.id)
-      ),
+      toggle: authedQuery.input(toggleRepostSchema).mutation(async ({ ctx, input }) => {
+        const result = await toggleRepost(input.postId, ctx.user.id);
+        if (result.reposted && result.postOwnerId) {
+          void createNotification(ctx.user.id, result.postOwnerId, "repost", input.postId);
+        }
+        return result;
+      }),
       isReposted: authedQuery.input(toggleRepostSchema).query(
         ({ ctx, input }) => isReposted(input.postId, ctx.user.id)
       )
@@ -48398,7 +48606,7 @@ var init_reposts_router = __esm({
 // server/queries/follows.ts
 async function toggleFollow(followerId, followingId) {
   if (followerId === followingId) return { following: false };
-  if (isMock4) {
+  if (isMock6) {
     const key = `${followerId}:${followingId}`;
     if (mockFollows.has(key)) {
       mockFollows.delete(key);
@@ -48419,7 +48627,7 @@ async function toggleFollow(followerId, followingId) {
   return { following: true };
 }
 async function isFollowing(followerId, followingId) {
-  if (isMock4) return mockFollows.has(`${followerId}:${followingId}`);
+  if (isMock6) return mockFollows.has(`${followerId}:${followingId}`);
   const db = getDb();
   const existing = await db.select().from(follows).where(
     and(eq(follows.followerId, followerId), eq(follows.followingId, followingId))
@@ -48427,7 +48635,7 @@ async function isFollowing(followerId, followingId) {
   return existing.length > 0;
 }
 async function listFollowing(followerId) {
-  if (isMock4) {
+  if (isMock6) {
     return [...mockFollows].filter((k) => k.startsWith(`${followerId}:`)).map((k) => Number(k.split(":")[1]));
   }
   const db = getDb();
@@ -48435,7 +48643,7 @@ async function listFollowing(followerId) {
   return rows.map((r) => r.followingId);
 }
 async function getFollowerCount(userId) {
-  if (isMock4) {
+  if (isMock6) {
     return [...mockFollows].filter((k) => k.endsWith(`:${userId}`)).length;
   }
   const db = getDb();
@@ -48443,20 +48651,20 @@ async function getFollowerCount(userId) {
   return row?.total ?? 0;
 }
 async function getFollowingCount(userId) {
-  if (isMock4) {
+  if (isMock6) {
     return [...mockFollows].filter((k) => k.startsWith(`${userId}:`)).length;
   }
   const db = getDb();
   const [row] = await db.select({ total: count() }).from(follows).where(eq(follows.followerId, userId));
   return row?.total ?? 0;
 }
-var isMock4, mockFollows;
+var isMock6, mockFollows;
 var init_follows = __esm({
   "server/queries/follows.ts"() {
     init_drizzle_orm();
     init_connection();
     init_schema2();
-    isMock4 = !process.env.DATABASE_URL;
+    isMock6 = !process.env.DATABASE_URL;
     mockFollows = /* @__PURE__ */ new Set();
   }
 });
@@ -48468,10 +48676,15 @@ var init_follows_router = __esm({
     init_middleware();
     init_follows();
     init_schemas3();
+    init_notifications();
     followsRouter = createRouter({
-      toggle: authedQuery.input(toggleFollowSchema).mutation(
-        ({ ctx, input }) => toggleFollow(ctx.user.id, input.followingId)
-      ),
+      toggle: authedQuery.input(toggleFollowSchema).mutation(async ({ ctx, input }) => {
+        const result = await toggleFollow(ctx.user.id, input.followingId);
+        if (result.following) {
+          void createNotification(ctx.user.id, input.followingId, "follow");
+        }
+        return result;
+      }),
       isFollowing: authedQuery.input(isFollowingSchema).query(
         ({ ctx, input }) => isFollowing(ctx.user.id, input.followingId)
       ),
@@ -48479,90 +48692,6 @@ var init_follows_router = __esm({
         ({ ctx }) => listFollowing(ctx.user.id)
       )
     });
-  }
-});
-
-// server/queries/users.ts
-async function findUserByUnionId(unionId) {
-  if (isMock5) return mockUserByUnionId.get(unionId);
-  const rows = await getDb().select().from(users).where(eq(users.unionId, unionId)).limit(1);
-  return rows.at(0);
-}
-async function findUserById(id) {
-  if (isMock5) return mockUserById.get(id);
-  const rows = await getDb().select().from(users).where(eq(users.id, id)).limit(1);
-  return rows.at(0);
-}
-async function updateUserProfile(id, data) {
-  if (isMock5) {
-    const user = mockUserById.get(id);
-    if (user) {
-      const updated = { ...user, ...data, updatedAt: /* @__PURE__ */ new Date() };
-      mockUserById.set(id, updated);
-      mockUserByUnionId.set(user.unionId, updated);
-    }
-    return;
-  }
-  await getDb().update(users).set({ ...data }).where(eq(users.id, id));
-}
-async function searchUsers(query) {
-  if (!query.trim()) return [];
-  if (isMock5) {
-    return [...mockUserById.values()].filter((u) => u.name?.toLowerCase().includes(query.toLowerCase())).slice(0, 10).map((u) => ({ id: u.id, name: u.name, avatar: u.avatar }));
-  }
-  const db = getDb();
-  return db.select({ id: users.id, name: users.name, avatar: users.avatar }).from(users).where(like(users.name, `%${query}%`)).limit(10);
-}
-async function upsertUser(data) {
-  if (isMock5) {
-    const existing = mockUserByUnionId.get(data.unionId);
-    const isOwner = data.unionId === env.ownerUnionId && !!env.ownerUnionId;
-    const user = existing ? { ...existing, ...data, updatedAt: /* @__PURE__ */ new Date(), lastSignInAt: data.lastSignInAt ?? /* @__PURE__ */ new Date() } : {
-      id: mockNextUserId++,
-      unionId: data.unionId,
-      name: data.name ?? null,
-      email: data.email ?? null,
-      avatar: data.avatar ?? null,
-      bio: data.bio ?? null,
-      role: isOwner ? "admin" : data.role ?? "user",
-      createdAt: data.createdAt ?? /* @__PURE__ */ new Date(),
-      updatedAt: data.updatedAt ?? /* @__PURE__ */ new Date(),
-      lastSignInAt: data.lastSignInAt ?? /* @__PURE__ */ new Date()
-    };
-    mockUserByUnionId.set(data.unionId, user);
-    mockUserById.set(user.id, user);
-    return;
-  }
-  const values = { ...data };
-  const updateSet = { lastSignInAt: /* @__PURE__ */ new Date(), ...data };
-  if (values.role === void 0 && values.unionId && values.unionId === env.ownerUnionId) {
-    values.role = "admin";
-    updateSet.role = "admin";
-  }
-  await getDb().insert(users).values(values).onDuplicateKeyUpdate({ set: updateSet });
-}
-var mockUserById, mockUserByUnionId, mockNextUserId, isMock5;
-var init_users = __esm({
-  "server/queries/users.ts"() {
-    init_drizzle_orm();
-    init_schema2();
-    init_connection();
-    init_env();
-    mockUserById = /* @__PURE__ */ new Map();
-    mockUserByUnionId = /* @__PURE__ */ new Map();
-    mockNextUserId = 5;
-    isMock5 = !env.databaseUrl;
-    if (isMock5) {
-      const seed = (u) => {
-        mockUserById.set(u.id, u);
-        mockUserByUnionId.set(u.unionId, u);
-      };
-      const ts = /* @__PURE__ */ new Date(0);
-      seed({ id: 1, unionId: "dev-user-local", name: "Dev User", email: null, avatar: null, bio: null, role: "user", createdAt: ts, updatedAt: ts, lastSignInAt: ts });
-      seed({ id: 2, unionId: "mock-alejandro", name: "Alejandro Marin", email: null, avatar: null, bio: null, role: "user", createdAt: ts, updatedAt: ts, lastSignInAt: ts });
-      seed({ id: 3, unionId: "mock-sofia", name: "Sofia Jimenez", email: null, avatar: null, bio: null, role: "user", createdAt: ts, updatedAt: ts, lastSignInAt: ts });
-      seed({ id: 4, unionId: "mock-carlos", name: "Carlos Rivera", email: null, avatar: null, bio: null, role: "user", createdAt: ts, updatedAt: ts, lastSignInAt: ts });
-    }
   }
 });
 
@@ -48612,7 +48741,7 @@ var init_users_router = __esm({
 
 // server/queries/messages.ts
 async function sendMessage(senderId, receiverId, content) {
-  if (isMock6) {
+  if (isMock7) {
     const id = nextMsgId++;
     mockMessages.push({ id, senderId, receiverId, content, readAt: null, createdAt: /* @__PURE__ */ new Date() });
     return { id };
@@ -48622,7 +48751,7 @@ async function sendMessage(senderId, receiverId, content) {
   return { id: result.insertId };
 }
 async function getThread(userId, otherId, limit = 60) {
-  if (isMock6) {
+  if (isMock7) {
     return mockMessages.filter(
       (m) => m.senderId === userId && m.receiverId === otherId || m.senderId === otherId && m.receiverId === userId
     ).sort((a, b) => a.createdAt.getTime() - b.createdAt.getTime()).slice(-limit);
@@ -48637,7 +48766,7 @@ async function getThread(userId, otherId, limit = 60) {
   return rows.reverse();
 }
 async function getConversations(userId) {
-  if (isMock6) {
+  if (isMock7) {
     const involved = mockMessages.filter(
       (m) => m.senderId === userId || m.receiverId === userId
     );
@@ -48685,7 +48814,7 @@ async function getConversations(userId) {
   }).sort((a, b) => b.lastAt.getTime() - a.lastAt.getTime());
 }
 async function markRead(userId, otherId) {
-  if (isMock6) {
+  if (isMock7) {
     mockMessages.filter((m) => m.senderId === otherId && m.receiverId === userId && m.readAt === null).forEach((m) => {
       m.readAt = /* @__PURE__ */ new Date();
     });
@@ -48695,21 +48824,21 @@ async function markRead(userId, otherId) {
   await db.update(messages).set({ readAt: /* @__PURE__ */ new Date() }).where(and(eq(messages.senderId, otherId), eq(messages.receiverId, userId), isNull2(messages.readAt)));
 }
 async function getTotalUnread(userId) {
-  if (isMock6) {
+  if (isMock7) {
     return mockMessages.filter((m) => m.receiverId === userId && m.readAt === null).length;
   }
   const db = getDb();
   const rows = await db.select({ id: messages.id }).from(messages).where(and(eq(messages.receiverId, userId), isNull2(messages.readAt)));
   return rows.length;
 }
-var isMock6, mockMessages, nextMsgId;
+var isMock7, mockMessages, nextMsgId;
 var init_messages = __esm({
   "server/queries/messages.ts"() {
     init_drizzle_orm();
     init_connection();
     init_schema2();
     init_users();
-    isMock6 = !process.env.DATABASE_URL;
+    isMock7 = !process.env.DATABASE_URL;
     mockMessages = [];
     nextMsgId = 1;
   }
@@ -48742,6 +48871,20 @@ var init_messages_router = __esm({
   }
 });
 
+// server/notifications-router.ts
+var notificationsRouter;
+var init_notifications_router = __esm({
+  "server/notifications-router.ts"() {
+    init_middleware();
+    init_notifications();
+    notificationsRouter = createRouter({
+      list: authedQuery.query(({ ctx }) => listNotifications(ctx.user.id)),
+      markRead: authedQuery.mutation(({ ctx }) => markAllRead(ctx.user.id)),
+      unreadCount: authedQuery.query(({ ctx }) => getUnreadNotifCount(ctx.user.id))
+    });
+  }
+});
+
 // server/router.ts
 var appRouter;
 var init_router5 = __esm({
@@ -48753,6 +48896,7 @@ var init_router5 = __esm({
     init_follows_router();
     init_users_router();
     init_messages_router();
+    init_notifications_router();
     init_middleware();
     appRouter = createRouter({
       ping: publicQuery.query(() => ({ ok: true, ts: Date.now() })),
@@ -48762,7 +48906,8 @@ var init_router5 = __esm({
       reposts: repostsRouter,
       follows: followsRouter,
       users: usersRouter,
-      messages: messagesRouter
+      messages: messagesRouter,
+      notifications: notificationsRouter
     });
   }
 });
