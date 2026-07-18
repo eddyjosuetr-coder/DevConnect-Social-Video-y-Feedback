@@ -92,7 +92,7 @@ function CommentBody({ content }: { content: string }) {
         }
         // gif
         return (
-          <img key={i} src={seg.url} alt="gif" className="rounded-xl max-h-48 object-contain" loading="lazy" />
+          <img key={i} src={seg.url} alt="gif" className="rounded-xl max-h-48 max-w-full block" style={{ objectFit: 'cover' }} loading="lazy" />
         );
       })}
     </div>
