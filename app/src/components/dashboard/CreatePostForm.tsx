@@ -12,6 +12,82 @@ const CODE_LANGUAGES = [
 
 const MAX_IMAGE_MB = 10;
 const MAX_VIDEO_MB = 100;
+const MAX_CHARS = 2000;
+
+function CharRing({ count, max }: { count: number; max: number }) {
+  const r = 10;
+  const circ = 2 * Math.PI * r;
+  const pct = Math.min(count / max, 1);
+  const remaining = max - count;
+  const nearLimit = remaining <= 200;
+  const danger = remaining <= 50;
+  const stroke = danger ? '#EF4444' : nearLimit ? '#FEBC2E' : '#e1ff00';
+
+  return (
+    <svg width="28" height="28" className="shrink-0" aria-label={`${remaining} caracteres restantes`}>
+      <circle cx="14" cy="14" r={r} fill="none" stroke="#1E2535" strokeWidth="2.5" />
+      <circle
+        cx="14" cy="14" r={r} fill="none"
+        stroke={stroke}
+        strokeWidth="2.5"
+        strokeDasharray={circ}
+        strokeDashoffset={circ * (1 - pct)}
+        strokeLinecap="round"
+        transform="rotate(-90 14 14)"
+        style={{ transition: 'stroke-dashoffset 0.15s ease, stroke 0.3s ease' }}
+      />
+      {nearLimit && (
+        <text
+          x="14" y="18.5" textAnchor="middle"
+          fontSize="7.5" fill={stroke}
+          fontFamily="monospace" fontWeight="700"
+        >
+          {remaining}
+        </text>
+      )}
+    </svg>
+  );
+}
+
+interface ToolBtnProps {
+  children: React.ReactNode;
+  onClick: () => void;
+  active?: boolean;
+  activeColor?: string;
+  disabled?: boolean;
+  title?: string;
+}
+
+function ToolBtn({ children, onClick, active = false, activeColor = '#e1ff00', disabled, title }: ToolBtnProps) {
+  return (
+    <button
+      onClick={onClick}
+      disabled={disabled}
+      title={title}
+      className="w-9 h-9 rounded-full flex items-center justify-center transition-all duration-150 focus:outline-none focus-visible:ring-2 focus-visible:ring-[#e1ff00]/40"
+      style={{
+        color: active ? activeColor : '#3D4E68',
+        backgroundColor: active ? `${activeColor}1A` : 'transparent',
+      }}
+      onMouseEnter={(e) => {
+        if (!active && !disabled) {
+          const el = e.currentTarget as HTMLElement;
+          el.style.color = activeColor;
+          el.style.backgroundColor = `${activeColor}12`;
+        }
+      }}
+      onMouseLeave={(e) => {
+        if (!active) {
+          const el = e.currentTarget as HTMLElement;
+          el.style.color = '#3D4E68';
+          el.style.backgroundColor = 'transparent';
+        }
+      }}
+    >
+      {children}
+    </button>
+  );
+}
 
 interface CreatePostFormProps {
   user: User;
@@ -20,14 +96,15 @@ interface CreatePostFormProps {
 }
 
 export default function CreatePostForm({ user, onClose, addToast }: CreatePostFormProps) {
-  const [content,    setContent]    = useState('');
-  const [code,       setCode]       = useState('');
-  const [lang,       setLang]       = useState('typescript');
-  const [showCode,   setShowCode]   = useState(false);
-  const [mediaFile,  setMediaFile]  = useState<File | null>(null);
+  const [content,      setContent]      = useState('');
+  const [code,         setCode]         = useState('');
+  const [lang,         setLang]         = useState('typescript');
+  const [showCode,     setShowCode]     = useState(false);
+  const [mediaFile,    setMediaFile]    = useState<File | null>(null);
   const [mediaPreview, setMediaPreview] = useState<string | null>(null);
-  const [mediaType,  setMediaType]  = useState<'image' | 'video' | null>(null);
-  const [uploading,  setUploading]  = useState(false);
+  const [mediaType,    setMediaType]    = useState<'image' | 'video' | null>(null);
+  const [uploading,    setUploading]    = useState(false);
+  const [focused,      setFocused]      = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const utils = trpc.useUtils();
   const createPost = trpc.posts.create.useMutation();
@@ -129,132 +206,208 @@ export default function CreatePostForm({ user, onClose, addToast }: CreatePostFo
   };
 
   const isPending = uploading || createPost.isPending;
+  const canPost = content.trim().length > 0 && !isPending;
 
   return (
-    <div className="border-b border-[#2A3347] p-4">
-      <div className="flex items-start gap-3">
-        {user.avatar ? (
-          <img src={user.avatar} alt="" className="w-10 h-10 rounded-full object-cover shrink-0" />
-        ) : (
-          <div className="w-10 h-10 rounded-full bg-[#e1ff00] flex items-center justify-center text-[#050507] font-bold shrink-0">
-            {user.name?.charAt(0) ?? 'U'}
-          </div>
-        )}
-        <div className="flex-1">
-          <textarea
-            value={content}
-            onChange={(e) => setContent(e.target.value)}
-            placeholder="Que estas codificando hoy?"
-            className="w-full bg-transparent text-[#f3f2f2] resize-none outline-none min-h-[100px] text-[17px] placeholder:text-[#5A6680]"
-            maxLength={2000}
-            autoFocus
-          />
-          <div className="text-right text-xs text-[#5A6680] mb-2">{content.length}/2000</div>
+    <>
+      <style>{`
+        @keyframes dc-slide-down {
+          from { opacity: 0; transform: translateY(-8px); }
+          to   { opacity: 1; transform: translateY(0); }
+        }
+        @keyframes dc-glow-pulse {
+          0%, 100% { box-shadow: 0 0 14px rgba(225,255,0,0.15); }
+          50%       { box-shadow: 0 0 28px rgba(225,255,0,0.32); }
+        }
+        .dc-enter   { animation: dc-slide-down 0.2s ease forwards; }
+        .dc-glowing { animation: dc-glow-pulse 2.8s ease-in-out infinite; }
+      `}</style>
 
-          {/* Code block */}
-          {showCode && (
-            <div className="mb-3 p-3 bg-[#0D1117] rounded-lg border border-[#2A3347]">
-              <select
-                value={lang}
-                onChange={(e) => setLang(e.target.value)}
-                className="bg-[#151A27] text-[#8B9AB0] text-sm rounded px-2 py-1 mb-2 outline-none border border-[#2A3347]"
-              >
-                {CODE_LANGUAGES.map((l) => <option key={l} value={l}>{l}</option>)}
-              </select>
-              <textarea
-                value={code}
-                onChange={(e) => setCode(e.target.value)}
-                placeholder="Pega tu codigo aqui..."
-                className="w-full bg-[#0B0F17] text-[#A5D6FF] font-mono text-sm p-3 rounded resize-none outline-none min-h-[120px]"
-                spellCheck={false}
-              />
-            </div>
-          )}
+      <div
+        className="relative border-b border-[#1E2535] transition-all duration-300"
+        style={{
+          background: focused
+            ? 'linear-gradient(180deg, rgba(10,14,24,0.9) 0%, rgba(6,9,17,0.6) 100%)'
+            : 'transparent',
+        }}
+      >
+        {/* Vertical accent rail — activates on focus */}
+        <div
+          className="absolute left-0 top-0 bottom-0 w-[2px] transition-all duration-500"
+          style={{
+            background: 'linear-gradient(to bottom, transparent 5%, #e1ff00 40%, #e1ff00 60%, transparent 95%)',
+            opacity: focused ? 0.75 : 0,
+            transform: `scaleY(${focused ? 1 : 0.3})`,
+            transformOrigin: 'center',
+          }}
+        />
 
-          {/* Media preview */}
-          {mediaPreview && mediaType && (
-            <div className="relative mb-3 rounded-xl overflow-hidden border border-[#2A3347]">
-              {mediaType === 'image' ? (
+        <div className="p-4 pl-5">
+          <div className="flex items-start gap-3">
+
+            {/* Avatar */}
+            <div className="relative shrink-0 mt-0.5">
+              {user.avatar ? (
                 <img
-                  src={mediaPreview}
+                  src={user.avatar}
                   alt=""
-                  className="w-full max-h-80 object-contain bg-[#060911]"
+                  className="w-10 h-10 rounded-full object-cover transition-all duration-300"
+                  style={{
+                    outline: focused ? '2px solid rgba(225,255,0,0.35)' : '2px solid transparent',
+                    outlineOffset: '2px',
+                  }}
                 />
               ) : (
-                <video
-                  src={mediaPreview}
-                  controls
-                  className="w-full max-h-80 bg-[#060911]"
-                />
-              )}
-              <button
-                onClick={removeMedia}
-                className="absolute top-2 right-2 w-7 h-7 bg-black/70 rounded-full flex items-center justify-center text-[#f3f2f2] hover:bg-black/90 transition-colors"
-              >
-                <X size={14} />
-              </button>
-              {uploading && (
-                <div className="absolute inset-0 bg-black/60 flex items-center justify-center gap-2 text-[#f3f2f2] text-sm">
-                  <Loader2 size={20} className="animate-spin" />
-                  Subiendo...
+                <div className="w-10 h-10 rounded-full bg-gradient-to-br from-[#e1ff00] to-[#00ffff] flex items-center justify-center text-[#050507] font-bold text-sm">
+                  {user.name?.charAt(0) ?? 'U'}
                 </div>
               )}
-            </div>
-          )}
-
-          {/* Toolbar */}
-          <div className="flex items-center justify-between pt-2 border-t border-[#2A3347]">
-            <div className="flex items-center gap-1">
-              <button
-                onClick={() => setShowCode(!showCode)}
-                title="Agregar código"
-                className={`flex items-center gap-1.5 p-2 rounded-full transition-colors ${
-                  showCode ? 'text-[#3B82F6] bg-[#3B82F6]/10' : 'text-[#3B82F6] hover:bg-[#3B82F6]/10'
-                }`}
-              >
-                <Code2 size={20} />
-              </button>
-              <button
-                onClick={() => fileInputRef.current?.click()}
-                title="Agregar foto o video"
-                disabled={!!mediaFile}
-                className={`flex items-center gap-1.5 p-2 rounded-full transition-colors ${
-                  mediaFile
-                    ? 'text-[#e1ff00] bg-[#e1ff00]/10'
-                    : 'text-[#e1ff00] hover:bg-[#e1ff00]/10'
-                }`}
-              >
-                {mediaType === 'video' ? <Film size={20} /> : <ImagePlus size={20} />}
-              </button>
+              <span className="absolute -bottom-0.5 -right-0.5 w-2.5 h-2.5 bg-[#22C55E] rounded-full border-2 border-[#060911]" />
             </div>
 
-            <input
-              ref={fileInputRef}
-              type="file"
-              accept="image/*,video/*"
-              className="hidden"
-              onChange={handleFileSelect}
-            />
+            <div className="flex-1 min-w-0">
 
-            <div className="flex gap-2">
-              <button
-                onClick={onClose}
-                className="px-4 py-2 text-sm text-[#5A6680] hover:text-[#f3f2f2] rounded-full"
-              >
-                Cancelar
-              </button>
-              <button
-                onClick={handleSubmit}
-                disabled={!content.trim() || isPending}
-                className="bg-[#e1ff00] text-[#050507] font-bold px-5 py-2.5 rounded-full text-sm hover:bg-[#d4e600] transition-colors disabled:opacity-50 flex items-center gap-2"
-              >
-                {isPending && <Loader2 size={14} className="animate-spin" />}
-                {uploading ? 'Subiendo...' : createPost.isPending ? 'Publicando...' : 'Postear'}
-              </button>
+              {/* Compose textarea */}
+              <textarea
+                value={content}
+                onChange={(e) => setContent(e.target.value)}
+                onFocus={() => setFocused(true)}
+                onBlur={() => setFocused(false)}
+                placeholder="¿Qué estás codificando hoy?"
+                className="w-full bg-transparent text-[#f3f2f2] resize-none outline-none text-[17px] leading-relaxed placeholder:text-[#2A3347] min-h-[88px] transition-colors duration-200"
+                maxLength={MAX_CHARS}
+                autoFocus
+              />
+
+              {/* Code block */}
+              {showCode && (
+                <div className="dc-enter mb-3 rounded-xl overflow-hidden border border-[#1E2535]">
+                  <div className="bg-[#0B0E17] px-3 py-2.5 flex items-center gap-3 border-b border-[#1E2535]">
+                    <div className="flex gap-1.5 shrink-0">
+                      <span className="w-2.5 h-2.5 rounded-full bg-[#FF5F57]" />
+                      <span className="w-2.5 h-2.5 rounded-full bg-[#FEBC2E]" />
+                      <span className="w-2.5 h-2.5 rounded-full bg-[#28C840]" />
+                    </div>
+                    <select
+                      value={lang}
+                      onChange={(e) => setLang(e.target.value)}
+                      className="bg-transparent text-[#5A6680] text-xs font-mono outline-none cursor-pointer hover:text-[#8B9AB0] transition-colors"
+                    >
+                      {CODE_LANGUAGES.map((l) => <option key={l} value={l}>{l}</option>)}
+                    </select>
+                  </div>
+                  <textarea
+                    value={code}
+                    onChange={(e) => setCode(e.target.value)}
+                    placeholder="// pega tu código aquí..."
+                    className="w-full bg-[#060911] text-[#A5D6FF] font-mono text-sm p-4 resize-none outline-none min-h-[120px] placeholder:text-[#1E2535]"
+                    spellCheck={false}
+                  />
+                </div>
+              )}
+
+              {/* Media preview */}
+              {mediaPreview && mediaType && (
+                <div className="dc-enter relative mb-3 rounded-xl overflow-hidden border border-[#1E2535] bg-[#060911]">
+                  {mediaType === 'image' ? (
+                    <img src={mediaPreview} alt="" className="w-full max-h-72 object-contain" />
+                  ) : (
+                    <video src={mediaPreview} controls className="w-full max-h-72" />
+                  )}
+                  <button
+                    onClick={removeMedia}
+                    className="absolute top-2 right-2 w-7 h-7 rounded-full flex items-center justify-center text-white hover:scale-110 active:scale-95 transition-transform border border-white/10"
+                    style={{ background: 'rgba(0,0,0,0.75)', backdropFilter: 'blur(6px)' }}
+                  >
+                    <X size={13} />
+                  </button>
+                  {uploading && (
+                    <div
+                      className="absolute inset-0 flex flex-col items-center justify-center gap-2"
+                      style={{ background: 'rgba(6,9,17,0.82)', backdropFilter: 'blur(6px)' }}
+                    >
+                      <Loader2 size={26} className="animate-spin text-[#e1ff00]" />
+                      <span className="text-[#e1ff00] text-xs font-mono tracking-widest uppercase">
+                        Subiendo
+                      </span>
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {/* Toolbar */}
+              <div className="flex items-center justify-between pt-3 border-t border-[#1E2535] mt-1">
+
+                {/* Left tools */}
+                <div className="flex items-center gap-0.5">
+                  <ToolBtn
+                    onClick={() => setShowCode(!showCode)}
+                    active={showCode}
+                    activeColor="#3B82F6"
+                    title="Agregar código"
+                  >
+                    <Code2 size={18} />
+                  </ToolBtn>
+                  <ToolBtn
+                    onClick={() => fileInputRef.current?.click()}
+                    active={!!mediaFile}
+                    activeColor="#e1ff00"
+                    disabled={!!mediaFile}
+                    title="Agregar imagen o video"
+                  >
+                    {mediaType === 'video' ? <Film size={18} /> : <ImagePlus size={18} />}
+                  </ToolBtn>
+                </div>
+
+                <input
+                  ref={fileInputRef}
+                  type="file"
+                  accept="image/*,video/*"
+                  className="hidden"
+                  onChange={handleFileSelect}
+                />
+
+                {/* Right controls */}
+                <div className="flex items-center gap-3">
+                  <CharRing count={content.length} max={MAX_CHARS} />
+
+                  <div className="w-px h-5 bg-[#1E2535]" />
+
+                  <button
+                    onClick={onClose}
+                    className="text-sm text-[#3D4E68] hover:text-[#8B9AB0] transition-colors px-2 py-1 rounded-lg hover:bg-[#1E2535] focus:outline-none"
+                  >
+                    Cancelar
+                  </button>
+
+                  <button
+                    onClick={handleSubmit}
+                    disabled={!canPost}
+                    className={`px-5 py-2 rounded-full text-sm font-bold transition-all duration-200 disabled:opacity-40 disabled:cursor-not-allowed flex items-center gap-2 focus:outline-none focus-visible:ring-2 focus-visible:ring-[#e1ff00]/50 ${canPost ? 'dc-glowing' : ''}`}
+                    style={{
+                      background: canPost
+                        ? 'linear-gradient(135deg, #e1ff00 0%, #c8e000 100%)'
+                        : '#0D1117',
+                      color: canPost ? '#050507' : '#3D4E68',
+                      border: canPost ? 'none' : '1px solid #1E2535',
+                    }}
+                  >
+                    {isPending && <Loader2 size={13} className="animate-spin" />}
+                    <span>
+                      {uploading
+                        ? 'Subiendo...'
+                        : createPost.isPending
+                          ? 'Publicando...'
+                          : 'Postear'}
+                    </span>
+                  </button>
+                </div>
+              </div>
+
             </div>
           </div>
         </div>
       </div>
-    </div>
+    </>
   );
 }
