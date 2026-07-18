@@ -1,5 +1,6 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { Code2 } from 'lucide-react';
+import { useLocation } from 'react-router';
 import { useAuth } from '@/hooks/useAuth';
 import { useToast } from '@/hooks/useToast';
 import { trpc } from '@/providers/trpc';
@@ -35,11 +36,16 @@ function loadSavedIds(): Set<number> {
   return new Set<number>();
 }
 
+type MessagePartner = { id: number; name: string | null; avatar: string | null };
+
 export default function Dashboard() {
   const { user, isLoading, isAuthenticated, logout } = useAuth({ redirectOnUnauthenticated: true, redirectPath: '/' });
   const { toasts, addToast, removeToast } = useToast();
+  const location = useLocation();
 
-  const [activeTab,    setActiveTab]    = useState<ActiveTab>('feed');
+  const [activeTab,       setActiveTab]       = useState<ActiveTab>('feed');
+  const [initialPartner,  setInitialPartner]  = useState<MessagePartner | null>(null);
+  const handledState = useRef(false);
   const [showPost,     setShowPost]     = useState(false);
   const [mobileSidebar, setMobileSidebar] = useState(false);
   const [followedUsers, setFollowedUsers] = useState<Set<string>>(new Set());
@@ -48,6 +54,17 @@ export default function Dashboard() {
   const [savedPostIds,  setSavedPostIds]  = useState<Set<number>>(loadSavedIds);
 
   const { data: postsList, isLoading: postsLoading } = trpc.posts.list.useQuery();
+
+  // Open messages tab when navigated from a profile "Mensaje" button
+  useEffect(() => {
+    if (handledState.current) return;
+    const state = location.state as { openMessages?: boolean; partner?: MessagePartner } | null;
+    if (state?.openMessages && state?.partner) {
+      handledState.current = true;
+      setActiveTab('messages');
+      setInitialPartner(state.partner);
+    }
+  }, [location.state]);
 
   // Persist bookmarks to localStorage whenever they change
   useEffect(() => {
@@ -240,7 +257,12 @@ export default function Dashboard() {
           {activeTab === 'notifications' && <NotificationsTab />}
 
           {/* ── MESSAGES TAB ─────────────────────────────────── */}
-          {activeTab === 'messages' && <MessagesTab />}
+          {activeTab === 'messages' && (
+            <MessagesTab
+              initialPartner={initialPartner}
+              onPartnerConsumed={() => setInitialPartner(null)}
+            />
+          )}
 
           {/* ── BOOKMARKS TAB ────────────────────────────────── */}
           {activeTab === 'bookmarks' && (

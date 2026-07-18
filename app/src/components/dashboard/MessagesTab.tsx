@@ -230,11 +230,28 @@ function NewConvPicker({ onSelect, onClose }: {
 }
 
 // ── MessagesTab (main) ────────────────────────────────────────────────────────
-export default function MessagesTab() {
+type Partner = { id: number; name: string | null; avatar: string | null };
+
+export default function MessagesTab({
+  initialPartner,
+  onPartnerConsumed,
+}: {
+  initialPartner?: Partner | null;
+  onPartnerConsumed?: () => void;
+}) {
   const { user: me } = useAuth();
-  const [partner, setPartner] = useState<{ id: number; name: string | null; avatar: string | null } | null>(null);
+  const [partner, setPartner] = useState<Partner | null>(initialPartner ?? null);
   const [showNewConv, setShowNewConv] = useState(false);
   const [search, setSearch] = useState('');
+
+  // If a new initialPartner arrives (navigated from a profile page), open it
+  useEffect(() => {
+    if (initialPartner) {
+      setPartner(initialPartner);
+      onPartnerConsumed?.();
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [initialPartner?.id]);
 
   const { data: conversations = [], isLoading } = trpc.messages.conversations.useQuery(
     undefined,

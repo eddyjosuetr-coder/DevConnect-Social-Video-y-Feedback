@@ -1,6 +1,6 @@
 import { useState, useId } from 'react';
 import { useParams, useNavigate } from 'react-router';
-import { ArrowLeft, Calendar, UserCheck, UserPlus, Verified, LayoutGrid } from 'lucide-react';
+import { ArrowLeft, Calendar, UserCheck, UserPlus, Verified, LayoutGrid, MessageSquare } from 'lucide-react';
 import { trpc } from '@/providers/trpc';
 import { useAuth } from '@/hooks/useAuth';
 import { useToast } from '@/hooks/useToast';
@@ -332,7 +332,24 @@ export default function UserProfile() {
             </div>
 
             {/* Action button row — right-aligned, vertically centered with avatar overlap */}
-            <div className="flex justify-end pt-3 mb-10">
+            <div className="flex justify-end gap-2 pt-3 mb-10">
+              {!isOwnProfile && isAuthenticated && (
+                <button
+                  onClick={() =>
+                    navigate('/app', {
+                      state: {
+                        openMessages: true,
+                        partner: { id: userId, name: profile.name, avatar: profile.avatar },
+                      },
+                    })
+                  }
+                  title="Enviar mensaje"
+                  className="flex items-center gap-1.5 px-4 py-1.5 rounded-full text-sm font-semibold border border-[#2A3347] text-[#C9D5E8] hover:border-[#3B82F6]/60 hover:text-[#3B82F6] transition-all"
+                >
+                  <MessageSquare size={14} />
+                  Mensaje
+                </button>
+              )}
               {!isOwnProfile && (
                 <FollowButton isFollowing={isFollowing} loading={followLoading} onClick={handleFollowClick} />
               )}
