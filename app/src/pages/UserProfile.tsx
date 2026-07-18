@@ -6,6 +6,8 @@ import { useAuth } from '@/hooks/useAuth';
 import { useToast } from '@/hooks/useToast';
 import PostCard from '@/components/dashboard/PostCard';
 import ToastContainer from '@/components/ToastContainer';
+import DashboardSidebar from '@/components/dashboard/DashboardSidebar';
+import type { User as AuthUser } from '@db/schema';
 
 // ── Color palette per user id ─────────────────────────────────────────────────
 const PALETTES: Array<[string, string]> = [
@@ -166,10 +168,11 @@ export default function UserProfile() {
   const { userId: userIdParam } = useParams<{ userId: string }>();
   const userId = Number(userIdParam);
   const navigate = useNavigate();
-  const { user: me, isAuthenticated } = useAuth();
+  const { user: me, isAuthenticated, logout } = useAuth();
   const { toasts, addToast, removeToast } = useToast();
 
   const isOwnProfile = isAuthenticated && me?.id === userId;
+  const [mobileSidebar, setMobileSidebar] = useState(false);
   const [c1, c2] = palette(userId);
 
   const { data: profile, isLoading: profileLoading } = trpc.users.getProfile.useQuery(
@@ -247,36 +250,64 @@ export default function UserProfile() {
   }
 
   return (
-    <div className="min-h-screen bg-[#060911]" style={{ animation: 'pf-in 0.35s ease both' }}>
+    <div className="min-h-screen bg-[#060911] flex">
       <style>{`
         @keyframes ring-spin { to { transform: rotate(360deg); } }
         @keyframes pf-in { from { opacity:0; transform:translateY(10px); } to { opacity:1; transform:translateY(0); } }
       `}</style>
       <ToastContainer toasts={toasts} removeToast={removeToast} />
 
-      {/* ── Global sticky header ── */}
-      <div
-        className="sticky top-0 z-30 border-b border-[#1E2535] px-4 py-2.5 flex items-center gap-3"
-        style={{ background: 'rgba(6,9,17,0.88)', backdropFilter: 'blur(12px)' }}
-      >
-        <button
-          onClick={() => navigate(-1)}
-          className="p-1.5 rounded-lg text-[#6B7FA8] hover:text-[#f3f2f2] hover:bg-[#1E2535] transition-all shrink-0"
-        >
-          <ArrowLeft size={17} />
-        </button>
-        <div className="flex-1 min-w-0">
-          <p className="text-[#f3f2f2] font-bold text-sm leading-tight truncate">{profile.name ?? 'Developer'}</p>
-          <p className="text-[#3D4E68] text-[11px] font-mono">{postCount} {postCount === 1 ? 'post' : 'posts'}</p>
-        </div>
-        {/* Small logo */}
-        <img src="/images/logo-solocara.png" alt="DevConnect"
-          className="w-7 h-7 object-contain opacity-60 shrink-0"
-          style={{ filter: 'drop-shadow(0 0 6px rgba(225,255,0,0.5))' }} />
-      </div>
+      {/* ── Left sidebar (authenticated only) ── */}
+      {isAuthenticated && me && (
+        <DashboardSidebar
+          user={me as AuthUser}
+          activeTab="feed"
+          onTabChange={() => navigate('/app')}
+          onCreatePost={() => navigate('/app')}
+          onLogout={logout}
+          mobileSidebar={mobileSidebar}
+          onCloseMobile={() => setMobileSidebar(false)}
+        />
+      )}
 
-      {/* ── Centered column ── */}
-      <div className="max-w-2xl mx-auto px-0 sm:px-4 pt-4 pb-12">
+      {/* ── Main column ── */}
+      <main className="flex-1 min-w-0" style={{ animation: 'pf-in 0.35s ease both' }}>
+
+        {/* Mobile header (only when authenticated) */}
+        {isAuthenticated && me && (
+          <div className="lg:hidden flex items-center justify-between p-4 border-b border-[#1E2535] sticky top-0 bg-[#060911]/95 backdrop-blur-sm z-30">
+            <button onClick={() => setMobileSidebar(true)}>
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="text-[#f3f2f2]">
+                <line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="18" x2="21" y2="18"/>
+              </svg>
+            </button>
+            <img src="/images/logo-solocara.png" alt="DevConnect" className="w-7 h-7 object-contain"
+              style={{ filter: 'drop-shadow(0 0 6px rgba(225,255,0,0.6))' }} />
+            <div className="w-8 h-8 rounded-full bg-[#e1ff00] flex items-center justify-center text-[#050507] font-bold text-xs">
+              {me.name?.charAt(0) ?? 'U'}
+            </div>
+          </div>
+        )}
+
+        {/* ── Desktop sticky header ── */}
+        <div
+          className="sticky top-0 z-30 border-b border-[#1E2535] px-5 py-3 flex items-center gap-3"
+          style={{ background: 'rgba(6,9,17,0.88)', backdropFilter: 'blur(12px)' }}
+        >
+          <button
+            onClick={() => navigate(-1)}
+            className="p-1.5 rounded-lg text-[#6B7FA8] hover:text-[#f3f2f2] hover:bg-[#1E2535] transition-all shrink-0"
+          >
+            <ArrowLeft size={17} />
+          </button>
+          <div className="flex-1 min-w-0">
+            <p className="text-[#f3f2f2] font-bold text-sm leading-tight truncate">{profile.name ?? 'Developer'}</p>
+            <p className="text-[#3D4E68] text-[11px] font-mono">{postCount} {postCount === 1 ? 'post' : 'posts'}</p>
+          </div>
+        </div>
+
+        {/* ── Centered column ── */}
+        <div className="max-w-2xl mx-auto px-0 sm:px-4 pt-4 pb-12">
 
         {/* ── Profile card ── */}
         <div
@@ -376,7 +407,8 @@ export default function UserProfile() {
             <PostCard key={post.id} post={post} addToast={addToast} />
           ))
         )}
-      </div>
+        </div>
+      </main>
     </div>
   );
 }
