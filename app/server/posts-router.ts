@@ -1,6 +1,6 @@
 import { createRouter, publicQuery, authedQuery } from "./middleware";
-import { listPosts, listPostsByUser, createPost, toggleLike, isLiked, deletePost } from "./queries/posts";
-import { createPostSchema, toggleLikeSchema, isLikedSchema, deletePostSchema, listPostsByUserSchema } from "@contracts/schemas";
+import { listPosts, listPostsByUser, createPost, toggleLike, isLiked, deletePost, updatePost } from "./queries/posts";
+import { createPostSchema, toggleLikeSchema, isLikedSchema, deletePostSchema, listPostsByUserSchema, updatePostSchema } from "@contracts/schemas";
 import { createNotification } from "./queries/notifications";
 
 export const postsRouter = createRouter({
@@ -38,5 +38,14 @@ export const postsRouter = createRouter({
 
   delete: authedQuery.input(deletePostSchema).mutation(({ ctx, input }) =>
     deletePost(input.postId, ctx.user.id)
+  ),
+
+  update: authedQuery.input(updatePostSchema).mutation(({ ctx, input }) =>
+    updatePost(input.postId, ctx.user.id, {
+      content: input.content,
+      code: input.code,
+      codeLanguage: input.codeLanguage,
+      tags: input.tags,
+    })
   ),
 });

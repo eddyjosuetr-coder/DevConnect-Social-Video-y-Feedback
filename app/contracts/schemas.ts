@@ -15,6 +15,14 @@ export const isLikedSchema = z.object({ postId: z.number().int() });
 
 export const deletePostSchema = z.object({ postId: z.number().int() });
 
+export const updatePostSchema = z.object({
+  postId: z.number().int(),
+  content: z.string().min(1).max(2000).optional(),
+  code: z.string().max(5000).nullable().optional(),
+  codeLanguage: z.string().max(50).nullable().optional(),
+  tags: z.string().max(500).nullable().optional(),
+});
+
 export const listCommentsSchema = z.object({ postId: z.number().int() });
 
 export const createCommentSchema = z.object({

@@ -212,3 +212,33 @@ export async function deletePost(postId: number, userId: number): Promise<{ succ
   await db.delete(posts).where(and(eq(posts.id, postId), eq(posts.userId, userId)));
   return { success: true };
 }
+
+export async function updatePost(
+  postId: number,
+  userId: number,
+  data: {
+    content?: string;
+    code?: string | null;
+    codeLanguage?: string | null;
+    tags?: string | null;
+  },
+): Promise<{ success: boolean }> {
+  if (isMock) {
+    const post = mockPosts.find((p) => p.id === postId && p.userId === userId);
+    if (!post) return { success: false };
+    if (data.content !== undefined) post.content = data.content;
+    if (data.code !== undefined) post.code = data.code;
+    if (data.codeLanguage !== undefined) post.codeLanguage = data.codeLanguage;
+    if (data.tags !== undefined) post.tags = data.tags;
+    return { success: true };
+  }
+  const db = getDb();
+  const fields: Partial<typeof posts.$inferInsert> = {};
+  if (data.content !== undefined) fields.content = data.content;
+  if (data.code !== undefined) fields.code = data.code ?? undefined;
+  if (data.codeLanguage !== undefined) fields.codeLanguage = data.codeLanguage ?? undefined;
+  if (data.tags !== undefined) fields.tags = data.tags ?? undefined;
+  if (Object.keys(fields).length === 0) return { success: false };
+  await db.update(posts).set(fields).where(and(eq(posts.id, postId), eq(posts.userId, userId)));
+  return { success: true };
+}
