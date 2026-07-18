@@ -36,13 +36,19 @@ export function getDb() {
       schema: fullSchema,
     });
 
-    migrationReady = pool
-      .execute("ALTER TABLE users ADD COLUMN banner TEXT")
-      .then(() => {})
-      .catch((err: { errno?: number; message: string }) => {
-        // errno 1060 = Duplicate column name — column already exists, which is fine
-        if (err.errno !== 1060) console.warn("[migrate] banner:", err.message);
-      });
+    migrationReady = (async () => {
+      try {
+        await pool.execute("ALTER TABLE users ADD COLUMN banner MEDIUMTEXT");
+      } catch (e: unknown) {
+        // 1060 = column already exists — upgrade type in case it was added as TEXT
+        if ((e as { errno?: number }).errno === 1060) {
+          await pool.execute("ALTER TABLE users MODIFY COLUMN banner MEDIUMTEXT").catch(() => {});
+        }
+      }
+      try {
+        await pool.execute("ALTER TABLE users MODIFY COLUMN avatar MEDIUMTEXT");
+      } catch {}
+    })();
   }
   return instance;
 }
