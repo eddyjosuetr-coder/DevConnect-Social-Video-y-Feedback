@@ -1,5 +1,6 @@
 import { useState, useRef, useCallback, useEffect } from 'react';
 import { Code2, ImagePlus, X, Loader2, Film, Smile, Search } from 'lucide-react';
+import LangSelect from './LangSelect';
 import Picker from '@emoji-mart/react';
 import data from '@emoji-mart/data';
 import { trpc } from '@/providers/trpc';
@@ -7,11 +8,6 @@ import { uploadMedia, cloudinaryConfigured } from '@/lib/cloudinary';
 import { fetchTrending, searchGifs, type GifItem } from '@/lib/giphy';
 import type { Toast } from '@/hooks/useToast';
 import type { User } from '@db/schema';
-
-const CODE_LANGUAGES = [
-  'typescript', 'javascript', 'python', 'go', 'rust',
-  'java', 'sql', 'bash', 'json', 'yaml', 'css', 'html', 'tsx', 'dockerfile',
-];
 
 const MAX_IMAGE_MB = 10;
 const MAX_VIDEO_MB = 100;
@@ -502,13 +498,7 @@ export default function CreatePostForm({ user, onClose, addToast }: CreatePostFo
                       <span className="w-2.5 h-2.5 rounded-full bg-[#FEBC2E]" />
                       <span className="w-2.5 h-2.5 rounded-full bg-[#28C840]" />
                     </div>
-                    <select
-                      value={lang}
-                      onChange={(e) => setLang(e.target.value)}
-                      className="bg-transparent text-[#5A6680] text-xs font-mono outline-none cursor-pointer hover:text-[#8B9AB0] transition-colors"
-                    >
-                      {CODE_LANGUAGES.map((l) => <option key={l} value={l}>{l}</option>)}
-                    </select>
+                    <LangSelect value={lang} onChange={setLang} />
                   </div>
                   <textarea
                     value={code}

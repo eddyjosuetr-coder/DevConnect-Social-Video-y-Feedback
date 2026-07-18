@@ -1,13 +1,9 @@
 import { useState } from 'react';
 import { X, Code2, Loader2 } from 'lucide-react';
+import LangSelect from './LangSelect';
 import { trpc } from '@/providers/trpc';
 import type { Post } from './types';
 import type { Toast } from '@/hooks/useToast';
-
-const CODE_LANGUAGES = [
-  'typescript', 'javascript', 'python', 'go', 'rust',
-  'java', 'sql', 'bash', 'json', 'yaml', 'css', 'html', 'tsx', 'dockerfile',
-];
 
 const MAX_CHARS = 2000;
 
@@ -130,13 +126,7 @@ export default function EditPostModal({ post, onClose, onSaved, addToast }: Edit
                   <span className="w-2.5 h-2.5 rounded-full bg-[#FEBC2E]" />
                   <span className="w-2.5 h-2.5 rounded-full bg-[#28C840]" />
                 </div>
-                <select
-                  value={lang}
-                  onChange={(e) => setLang(e.target.value)}
-                  className="bg-transparent text-[#5A6680] text-xs font-mono outline-none cursor-pointer hover:text-[#8B9AB0] transition-colors"
-                >
-                  {CODE_LANGUAGES.map((l) => <option key={l} value={l}>{l}</option>)}
-                </select>
+                <LangSelect value={lang} onChange={setLang} />
               </div>
               <textarea
                 value={code}
