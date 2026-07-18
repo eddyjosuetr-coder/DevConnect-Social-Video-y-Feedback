@@ -1,7 +1,10 @@
-import { useState, useRef, useCallback } from 'react';
-import { Code2, ImagePlus, X, Loader2, Film } from 'lucide-react';
+import { useState, useRef, useCallback, useEffect } from 'react';
+import { Code2, ImagePlus, X, Loader2, Film, Smile, Search } from 'lucide-react';
+import Picker from '@emoji-mart/react';
+import data from '@emoji-mart/data';
 import { trpc } from '@/providers/trpc';
 import { uploadMedia, cloudinaryConfigured } from '@/lib/cloudinary';
+import { fetchTrending, searchGifs, type GifItem } from '@/lib/giphy';
 import type { Toast } from '@/hooks/useToast';
 import type { User } from '@db/schema';
 
@@ -14,6 +17,7 @@ const MAX_IMAGE_MB = 10;
 const MAX_VIDEO_MB = 100;
 const MAX_CHARS = 2000;
 
+/* ---------- CharRing ---------- */
 function CharRing({ count, max }: { count: number; max: number }) {
   const r = 10;
   const circ = 2 * Math.PI * r;
@@ -37,11 +41,8 @@ function CharRing({ count, max }: { count: number; max: number }) {
         style={{ transition: 'stroke-dashoffset 0.15s ease, stroke 0.3s ease' }}
       />
       {nearLimit && (
-        <text
-          x="14" y="18.5" textAnchor="middle"
-          fontSize="7.5" fill={stroke}
-          fontFamily="monospace" fontWeight="700"
-        >
+        <text x="14" y="18.5" textAnchor="middle" fontSize="7.5" fill={stroke}
+          fontFamily="monospace" fontWeight="700">
           {remaining}
         </text>
       )}
@@ -49,6 +50,7 @@ function CharRing({ count, max }: { count: number; max: number }) {
   );
 }
 
+/* ---------- ToolBtn ---------- */
 interface ToolBtnProps {
   children: React.ReactNode;
   onClick: () => void;
@@ -56,15 +58,16 @@ interface ToolBtnProps {
   activeColor?: string;
   disabled?: boolean;
   title?: string;
+  badge?: string;
 }
 
-function ToolBtn({ children, onClick, active = false, activeColor = '#e1ff00', disabled, title }: ToolBtnProps) {
+function ToolBtn({ children, onClick, active = false, activeColor = '#e1ff00', disabled, title, badge }: ToolBtnProps) {
   return (
     <button
       onClick={onClick}
       disabled={disabled}
       title={title}
-      className="w-9 h-9 rounded-full flex items-center justify-center transition-all duration-150 focus:outline-none focus-visible:ring-2 focus-visible:ring-[#e1ff00]/40"
+      className="relative h-9 min-w-9 px-1 rounded-full flex items-center justify-center transition-all duration-150 focus:outline-none focus-visible:ring-2 focus-visible:ring-[#e1ff00]/40"
       style={{
         color: active ? activeColor : '#3D4E68',
         backgroundColor: active ? `${activeColor}1A` : 'transparent',
@@ -84,11 +87,143 @@ function ToolBtn({ children, onClick, active = false, activeColor = '#e1ff00', d
         }
       }}
     >
-      {children}
+      {badge ? (
+        <span className="text-[11px] font-black tracking-tight px-1">{badge}</span>
+      ) : children}
     </button>
   );
 }
 
+/* ---------- GifPicker ---------- */
+function GifPicker({ onSelect, onClose }: { onSelect: (gif: GifItem) => void; onClose: () => void }) {
+  const [query, setQuery] = useState('');
+  const [gifs, setGifs] = useState<GifItem[]>([]);
+  const [loading, setLoading] = useState(false);
+  const ref = useRef<HTMLDivElement>(null);
+  const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  useEffect(() => {
+    setLoading(true);
+    fetchTrending()
+      .then(setGifs)
+      .catch(() => setGifs([]))
+      .finally(() => setLoading(false));
+  }, []);
+
+  useEffect(() => {
+    if (debounceRef.current) clearTimeout(debounceRef.current);
+    if (!query.trim()) {
+      fetchTrending().then(setGifs).catch(() => setGifs([]));
+      return;
+    }
+    debounceRef.current = setTimeout(() => {
+      setLoading(true);
+      searchGifs(query)
+        .then(setGifs)
+        .catch(() => setGifs([]))
+        .finally(() => setLoading(false));
+    }, 400);
+    return () => { if (debounceRef.current) clearTimeout(debounceRef.current); };
+  }, [query]);
+
+  useEffect(() => {
+    function onClickOutside(e: MouseEvent) {
+      if (ref.current && !ref.current.contains(e.target as Node)) onClose();
+    }
+    setTimeout(() => document.addEventListener('mousedown', onClickOutside), 0);
+    return () => document.removeEventListener('mousedown', onClickOutside);
+  }, [onClose]);
+
+  return (
+    <div
+      ref={ref}
+      className="absolute bottom-full mb-2 left-0 z-50 rounded-2xl border border-[#1E2535] shadow-2xl overflow-hidden dc-enter"
+      style={{ width: 340, background: '#0B0E17' }}
+    >
+      {/* Header */}
+      <div className="flex items-center gap-2 p-3 border-b border-[#1E2535]">
+        <div className="relative flex-1">
+          <Search size={13} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-[#3D4E68]" />
+          <input
+            autoFocus
+            value={query}
+            onChange={(e) => setQuery(e.target.value)}
+            placeholder="Buscar GIFs..."
+            className="w-full bg-[#141822] text-[#f3f2f2] text-sm pl-8 pr-3 py-1.5 rounded-lg outline-none placeholder:text-[#3D4E68] border border-[#1E2535] focus:border-[#e1ff00]/40 transition-colors"
+          />
+        </div>
+        <button onClick={onClose} className="text-[#3D4E68] hover:text-[#f3f2f2] transition-colors p-1">
+          <X size={14} />
+        </button>
+      </div>
+
+      {/* Powered by */}
+      <div className="px-3 py-1 text-[9px] font-mono text-[#2A3347] tracking-widest uppercase">
+        Powered by GIPHY
+      </div>
+
+      {/* Grid */}
+      <div className="overflow-y-auto p-2" style={{ height: 240 }}>
+        {loading ? (
+          <div className="h-full flex items-center justify-center">
+            <Loader2 size={20} className="animate-spin text-[#e1ff00]" />
+          </div>
+        ) : gifs.length === 0 ? (
+          <div className="h-full flex items-center justify-center text-[#3D4E68] text-sm">
+            Sin resultados
+          </div>
+        ) : (
+          <div className="grid grid-cols-3 gap-1.5">
+            {gifs.map((gif) => (
+              <button
+                key={gif.id}
+                onClick={() => { onSelect(gif); onClose(); }}
+                className="relative rounded-lg overflow-hidden aspect-video bg-[#1E2535] hover:ring-2 hover:ring-[#e1ff00]/60 hover:scale-105 transition-all duration-150 focus:outline-none"
+                title={gif.title}
+              >
+                <img
+                  src={gif.previewUrl}
+                  alt={gif.title}
+                  className="w-full h-full object-cover"
+                  loading="lazy"
+                />
+              </button>
+            ))}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+/* ---------- EmojiPanel ---------- */
+function EmojiPanel({ onSelect, onClose }: { onSelect: (native: string) => void; onClose: () => void }) {
+  const ref = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    function onClickOutside(e: MouseEvent) {
+      if (ref.current && !ref.current.contains(e.target as Node)) onClose();
+    }
+    setTimeout(() => document.addEventListener('mousedown', onClickOutside), 0);
+    return () => document.removeEventListener('mousedown', onClickOutside);
+  }, [onClose]);
+
+  return (
+    <div ref={ref} className="absolute bottom-full mb-2 left-0 z-50 dc-enter">
+      <Picker
+        data={data}
+        onEmojiSelect={(emoji: { native: string }) => onSelect(emoji.native)}
+        theme="dark"
+        locale="es"
+        previewPosition="none"
+        skinTonePosition="none"
+        set="native"
+      />
+    </div>
+  );
+}
+
+/* ---------- Main Component ---------- */
 interface CreatePostFormProps {
   user: User;
   onClose: () => void;
@@ -105,7 +240,12 @@ export default function CreatePostForm({ user, onClose, addToast }: CreatePostFo
   const [mediaType,    setMediaType]    = useState<'image' | 'video' | null>(null);
   const [uploading,    setUploading]    = useState(false);
   const [focused,      setFocused]      = useState(false);
+  const [showEmoji,    setShowEmoji]    = useState(false);
+  const [showGifs,     setShowGifs]     = useState(false);
+
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const textareaRef  = useRef<HTMLTextAreaElement>(null);
+  const cursorRef    = useRef<number>(0);
   const utils = trpc.useUtils();
   const createPost = trpc.posts.create.useMutation();
 
@@ -115,16 +255,10 @@ export default function CreatePostForm({ user, onClose, addToast }: CreatePostFo
 
     const isVideo = file.type.startsWith('video/');
     const isImage = file.type.startsWith('image/');
-    if (!isVideo && !isImage) {
-      addToast('Solo se permiten imágenes o videos', 'error');
-      return;
-    }
+    if (!isVideo && !isImage) { addToast('Solo se permiten imágenes o videos', 'error'); return; }
 
     const maxMB = isVideo ? MAX_VIDEO_MB : MAX_IMAGE_MB;
-    if (file.size > maxMB * 1024 * 1024) {
-      addToast(`Archivo muy grande (máx ${maxMB}MB)`, 'error');
-      return;
-    }
+    if (file.size > maxMB * 1024 * 1024) { addToast(`Archivo muy grande (máx ${maxMB}MB)`, 'error'); return; }
 
     const preview = URL.createObjectURL(file);
     setMediaFile(file);
@@ -140,6 +274,27 @@ export default function CreatePostForm({ user, onClose, addToast }: CreatePostFo
     setMediaType(null);
   };
 
+  function insertEmoji(native: string) {
+    const pos = cursorRef.current;
+    const next = content.slice(0, pos) + native + content.slice(pos);
+    setContent(next);
+    setShowEmoji(false);
+    setTimeout(() => {
+      const ta = textareaRef.current;
+      if (!ta) return;
+      ta.focus();
+      ta.setSelectionRange(pos + native.length, pos + native.length);
+    }, 0);
+  }
+
+  function selectGif(gif: GifItem) {
+    if (mediaPreview) URL.revokeObjectURL(mediaPreview);
+    setMediaFile(null);
+    setMediaPreview(gif.url);
+    setMediaType('image');
+    setShowGifs(false);
+  }
+
   const handleSubmit = async () => {
     if (!content.trim()) return;
 
@@ -147,10 +302,7 @@ export default function CreatePostForm({ user, onClose, addToast }: CreatePostFo
     let uploadedType: 'image' | 'video' | undefined;
 
     if (mediaFile) {
-      if (!cloudinaryConfigured()) {
-        addToast('Cloudinary no configurado — contacta al admin', 'error');
-        return;
-      }
+      if (!cloudinaryConfigured()) { addToast('Cloudinary no configurado — contacta al admin', 'error'); return; }
       try {
         setUploading(true);
         const result = await uploadMedia(mediaFile);
@@ -160,47 +312,31 @@ export default function CreatePostForm({ user, onClose, addToast }: CreatePostFo
         addToast(err instanceof Error ? err.message : 'Error al subir archivo', 'error');
         setUploading(false);
         return;
-      } finally {
-        setUploading(false);
-      }
+      } finally { setUploading(false); }
+    } else if (mediaPreview && mediaType === 'image' && !mediaFile) {
+      // GIF — use the URL directly (no upload needed)
+      uploadedUrl  = mediaPreview;
+      uploadedType = 'image';
     }
 
     createPost.mutate(
+      { content, code: code || undefined, codeLanguage: lang, mediaUrl: uploadedUrl, mediaType: uploadedType },
       {
-        content,
-        code: code || undefined,
-        codeLanguage: lang,
-        mediaUrl: uploadedUrl,
-        mediaType: uploadedType,
-      },
-      {
-        onSuccess: (data) => {
+        onSuccess: (postData) => {
           utils.posts.list.setData(undefined, (old) => {
             const newPost = {
-              id: data.id,
-              content,
-              code: code || null,
-              codeLanguage: lang,
-              tags: null,
-              mediaUrl: uploadedUrl ?? null,
-              mediaType: uploadedType ?? null,
-              likesCount: 0,
-              commentsCount: 0,
-              repostsCount: 0,
-              createdAt: new Date(),
-              authorId: user.id,
-              authorName: user.name,
-              authorAvatar: user.avatar,
+              id: postData.id, content, code: code || null, codeLanguage: lang, tags: null,
+              mediaUrl: uploadedUrl ?? null, mediaType: uploadedType ?? null,
+              likesCount: 0, commentsCount: 0, repostsCount: 0, createdAt: new Date(),
+              authorId: user.id, authorName: user.name, authorAvatar: user.avatar,
             };
             return old ? [newPost, ...old] : [newPost];
           });
-          if (mediaPreview) URL.revokeObjectURL(mediaPreview);
+          if (mediaFile && mediaPreview) URL.revokeObjectURL(mediaPreview);
           addToast('Post publicado!', 'success');
           onClose();
         },
-        onError: (err) => {
-          addToast(`Error al publicar: ${err.message}`, 'error');
-        },
+        onError: (err) => addToast(`Error al publicar: ${err.message}`, 'error'),
       }
     );
   };
@@ -221,6 +357,13 @@ export default function CreatePostForm({ user, onClose, addToast }: CreatePostFo
         }
         .dc-enter   { animation: dc-slide-down 0.2s ease forwards; }
         .dc-glowing { animation: dc-glow-pulse 2.8s ease-in-out infinite; }
+        em-emoji-picker {
+          --background-rgb: 11,14,23;
+          --border-color: #1E2535;
+          --category-icon-size: 18px;
+          height: 340px;
+          width: 340px;
+        }
       `}</style>
 
       <div
@@ -231,7 +374,7 @@ export default function CreatePostForm({ user, onClose, addToast }: CreatePostFo
             : 'transparent',
         }}
       >
-        {/* Vertical accent rail — activates on focus */}
+        {/* Vertical accent rail */}
         <div
           className="absolute left-0 top-0 bottom-0 w-[2px] transition-all duration-500"
           style={{
@@ -249,13 +392,9 @@ export default function CreatePostForm({ user, onClose, addToast }: CreatePostFo
             <div className="relative shrink-0 mt-0.5">
               {user.avatar ? (
                 <img
-                  src={user.avatar}
-                  alt=""
+                  src={user.avatar} alt=""
                   className="w-10 h-10 rounded-full object-cover transition-all duration-300"
-                  style={{
-                    outline: focused ? '2px solid rgba(225,255,0,0.35)' : '2px solid transparent',
-                    outlineOffset: '2px',
-                  }}
+                  style={{ outline: focused ? '2px solid rgba(225,255,0,0.35)' : '2px solid transparent', outlineOffset: '2px' }}
                 />
               ) : (
                 <div className="w-10 h-10 rounded-full bg-gradient-to-br from-[#e1ff00] to-[#00ffff] flex items-center justify-center text-[#050507] font-bold text-sm">
@@ -267,14 +406,16 @@ export default function CreatePostForm({ user, onClose, addToast }: CreatePostFo
 
             <div className="flex-1 min-w-0">
 
-              {/* Compose textarea */}
+              {/* Textarea */}
               <textarea
+                ref={textareaRef}
                 value={content}
                 onChange={(e) => setContent(e.target.value)}
                 onFocus={() => setFocused(true)}
-                onBlur={() => setFocused(false)}
+                onBlur={() => { setFocused(false); cursorRef.current = textareaRef.current?.selectionStart ?? content.length; }}
+                onSelect={() => { cursorRef.current = textareaRef.current?.selectionStart ?? content.length; }}
                 placeholder="¿Qué estás codificando hoy?"
-                className="w-full bg-transparent text-[#f3f2f2] resize-none outline-none text-[17px] leading-relaxed placeholder:text-[#2A3347] min-h-[88px] transition-colors duration-200"
+                className="w-full bg-transparent text-[#f3f2f2] resize-none outline-none text-[17px] leading-relaxed placeholder:text-[#2A3347] min-h-[88px]"
                 maxLength={MAX_CHARS}
                 autoFocus
               />
@@ -306,13 +447,13 @@ export default function CreatePostForm({ user, onClose, addToast }: CreatePostFo
                 </div>
               )}
 
-              {/* Media preview */}
+              {/* Media / GIF preview */}
               {mediaPreview && mediaType && (
                 <div className="dc-enter relative mb-3 rounded-xl overflow-hidden border border-[#1E2535] bg-[#060911]">
-                  {mediaType === 'image' ? (
-                    <img src={mediaPreview} alt="" className="w-full max-h-72 object-contain" />
-                  ) : (
+                  {mediaType === 'video' ? (
                     <video src={mediaPreview} controls className="w-full max-h-72" />
+                  ) : (
+                    <img src={mediaPreview} alt="" className="w-full max-h-72 object-contain" />
                   )}
                   <button
                     onClick={removeMedia}
@@ -322,84 +463,66 @@ export default function CreatePostForm({ user, onClose, addToast }: CreatePostFo
                     <X size={13} />
                   </button>
                   {uploading && (
-                    <div
-                      className="absolute inset-0 flex flex-col items-center justify-center gap-2"
-                      style={{ background: 'rgba(6,9,17,0.82)', backdropFilter: 'blur(6px)' }}
-                    >
+                    <div className="absolute inset-0 flex flex-col items-center justify-center gap-2"
+                      style={{ background: 'rgba(6,9,17,0.82)', backdropFilter: 'blur(6px)' }}>
                       <Loader2 size={26} className="animate-spin text-[#e1ff00]" />
-                      <span className="text-[#e1ff00] text-xs font-mono tracking-widest uppercase">
-                        Subiendo
-                      </span>
+                      <span className="text-[#e1ff00] text-xs font-mono tracking-widest uppercase">Subiendo</span>
                     </div>
                   )}
                 </div>
               )}
 
               {/* Toolbar */}
-              <div className="flex items-center justify-between pt-3 border-t border-[#1E2535] mt-1">
+              <div className="relative flex items-center justify-between pt-3 border-t border-[#1E2535] mt-1">
 
                 {/* Left tools */}
                 <div className="flex items-center gap-0.5">
-                  <ToolBtn
-                    onClick={() => setShowCode(!showCode)}
-                    active={showCode}
-                    activeColor="#3B82F6"
-                    title="Agregar código"
-                  >
+                  <ToolBtn onClick={() => setShowCode(!showCode)} active={showCode} activeColor="#3B82F6" title="Agregar código">
                     <Code2 size={18} />
                   </ToolBtn>
-                  <ToolBtn
-                    onClick={() => fileInputRef.current?.click()}
-                    active={!!mediaFile}
-                    activeColor="#e1ff00"
-                    disabled={!!mediaFile}
-                    title="Agregar imagen o video"
-                  >
+                  <ToolBtn onClick={() => fileInputRef.current?.click()} active={!!mediaFile} activeColor="#e1ff00" disabled={!!mediaFile} title="Imagen o video">
                     {mediaType === 'video' ? <Film size={18} /> : <ImagePlus size={18} />}
                   </ToolBtn>
+                  <ToolBtn onClick={() => { setShowGifs(false); setShowEmoji(!showEmoji); }} active={showEmoji} activeColor="#F59E0B" title="Emoji">
+                    <Smile size={18} />
+                  </ToolBtn>
+                  <ToolBtn onClick={() => { setShowEmoji(false); setShowGifs(!showGifs); }} active={showGifs} activeColor="#EC4899" title="GIF" badge="GIF" />
                 </div>
 
-                <input
-                  ref={fileInputRef}
-                  type="file"
-                  accept="image/*,video/*"
-                  className="hidden"
-                  onChange={handleFileSelect}
-                />
+                {/* Emoji panel */}
+                {showEmoji && (
+                  <EmojiPanel onSelect={insertEmoji} onClose={() => setShowEmoji(false)} />
+                )}
+
+                {/* GIF panel */}
+                {showGifs && (
+                  <GifPicker onSelect={selectGif} onClose={() => setShowGifs(false)} />
+                )}
+
+                <input ref={fileInputRef} type="file" accept="image/*,video/*" className="hidden" onChange={handleFileSelect} />
 
                 {/* Right controls */}
                 <div className="flex items-center gap-3">
                   <CharRing count={content.length} max={MAX_CHARS} />
-
                   <div className="w-px h-5 bg-[#1E2535]" />
-
                   <button
                     onClick={onClose}
                     className="text-sm text-[#3D4E68] hover:text-[#8B9AB0] transition-colors px-2 py-1 rounded-lg hover:bg-[#1E2535] focus:outline-none"
                   >
                     Cancelar
                   </button>
-
                   <button
                     onClick={handleSubmit}
                     disabled={!canPost}
-                    className={`px-5 py-2 rounded-full text-sm font-bold transition-all duration-200 disabled:opacity-40 disabled:cursor-not-allowed flex items-center gap-2 focus:outline-none focus-visible:ring-2 focus-visible:ring-[#e1ff00]/50 ${canPost ? 'dc-glowing' : ''}`}
+                    className={`px-5 py-2 rounded-full text-sm font-bold transition-all duration-200 disabled:opacity-40 disabled:cursor-not-allowed flex items-center gap-2 focus:outline-none ${canPost ? 'dc-glowing' : ''}`}
                     style={{
-                      background: canPost
-                        ? 'linear-gradient(135deg, #e1ff00 0%, #c8e000 100%)'
-                        : '#0D1117',
+                      background: canPost ? 'linear-gradient(135deg, #e1ff00 0%, #c8e000 100%)' : '#0D1117',
                       color: canPost ? '#050507' : '#3D4E68',
                       border: canPost ? 'none' : '1px solid #1E2535',
                     }}
                   >
                     {isPending && <Loader2 size={13} className="animate-spin" />}
-                    <span>
-                      {uploading
-                        ? 'Subiendo...'
-                        : createPost.isPending
-                          ? 'Publicando...'
-                          : 'Postear'}
-                    </span>
+                    <span>{uploading ? 'Subiendo...' : createPost.isPending ? 'Publicando...' : 'Postear'}</span>
                   </button>
                 </div>
               </div>
