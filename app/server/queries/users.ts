@@ -45,7 +45,7 @@ export async function findUserById(id: number): Promise<User | undefined> {
 
 export async function updateUserProfile(
   id: number,
-  data: { name?: string; bio?: string; avatar?: string }
+  data: { name?: string; bio?: string; avatar?: string; banner?: string }
 ): Promise<void> {
   if (isMock) {
     const user = mockUserById.get(id);

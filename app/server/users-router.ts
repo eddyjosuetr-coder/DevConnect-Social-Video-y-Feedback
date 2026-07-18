@@ -10,6 +10,7 @@ export const usersRouter = createRouter({
         ...(input.name   !== undefined ? { name: input.name }     : {}),
         ...(input.bio    !== undefined ? { bio: input.bio }       : {}),
         ...(input.avatar !== undefined ? { avatar: input.avatar } : {}),
+        ...(input.banner !== undefined ? { banner: input.banner } : {}),
       });
       return { success: true };
     }),

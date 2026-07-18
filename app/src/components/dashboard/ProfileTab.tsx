@@ -32,10 +32,21 @@ export default function ProfileTab({ user, postsList, savedPostIds, onToggleSave
   return (
     <div>
       {/* Banner */}
-      <div className="h-36 bg-gradient-to-br from-[#0A1020] via-[#111827] to-[#0A0E18] relative overflow-hidden">
-        <div className="absolute inset-0 opacity-20"
-          style={{ backgroundImage: 'radial-gradient(circle at 20% 50%, #e1ff00 0%, transparent 50%), radial-gradient(circle at 80% 20%, #3B82F6 0%, transparent 40%)' }}
-        />
+      <div className="h-36 relative overflow-hidden">
+        {(user as User & { banner?: string | null }).banner ? (
+          <img
+            src={(user as User & { banner?: string | null }).banner!}
+            alt=""
+            className="w-full h-full object-cover"
+          />
+        ) : (
+          <>
+            <div className="absolute inset-0 bg-gradient-to-br from-[#0A1020] via-[#111827] to-[#0A0E18]" />
+            <div className="absolute inset-0 opacity-20"
+              style={{ backgroundImage: 'radial-gradient(circle at 20% 50%, #e1ff00 0%, transparent 50%), radial-gradient(circle at 80% 20%, #3B82F6 0%, transparent 40%)' }}
+            />
+          </>
+        )}
       </div>
 
       {/* Avatar + Edit */}

@@ -8,6 +8,14 @@ const fullSchema = { ...schema, ...relations };
 
 let instance: ReturnType<typeof drizzle<typeof fullSchema>>;
 let pool: mysql.Pool;
+let migrationRan = false;
+
+function runMigrationsOnce(p: mysql.Pool) {
+  if (migrationRan) return;
+  migrationRan = true;
+  p.execute("ALTER TABLE users ADD COLUMN IF NOT EXISTS banner TEXT")
+    .catch((err: Error) => console.warn("[migrate] banner column:", err.message));
+}
 
 export function getDb() {
   if (!instance) {
@@ -33,6 +41,8 @@ export function getDb() {
       mode: "default",
       schema: fullSchema,
     });
+
+    runMigrationsOnce(pool);
   }
   return instance;
 }

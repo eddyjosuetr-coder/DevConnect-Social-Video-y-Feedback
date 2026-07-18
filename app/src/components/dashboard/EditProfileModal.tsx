@@ -10,21 +10,20 @@ interface EditProfileModalProps {
   addToast: (message: string, type: Toast['type']) => void;
 }
 
-const MAX_AVATAR_PX = 400;
 const MAX_BIO_CHARS = 300;
 
-function compressImage(file: File): Promise<string> {
+function compressImage(file: File, maxPx: number, quality = 0.85): Promise<string> {
   return new Promise((resolve, reject) => {
     const reader = new FileReader();
     reader.onload = (e) => {
       const img = new Image();
       img.onload = () => {
-        const scale = Math.min(1, MAX_AVATAR_PX / Math.max(img.width, img.height));
+        const scale = Math.min(1, maxPx / Math.max(img.width, img.height));
         const canvas = document.createElement('canvas');
         canvas.width  = Math.round(img.width  * scale);
         canvas.height = Math.round(img.height * scale);
         canvas.getContext('2d')!.drawImage(img, 0, 0, canvas.width, canvas.height);
-        resolve(canvas.toDataURL('image/jpeg', 0.85));
+        resolve(canvas.toDataURL('image/jpeg', quality));
       };
       img.onerror = reject;
       img.src = e.target!.result as string;
@@ -35,11 +34,14 @@ function compressImage(file: File): Promise<string> {
 }
 
 export default function EditProfileModal({ user, onClose, addToast }: EditProfileModalProps) {
-  const [name,          setName]          = useState(user.name   ?? '');
-  const [bio,           setBio]           = useState(user.bio    ?? '');
-  const [avatarPreview, setAvatarPreview] = useState<string | null>(user.avatar ?? null);
-  const [newAvatarData, setNewAvatarData] = useState<string | undefined>(undefined);
-  const fileInputRef = useRef<HTMLInputElement>(null);
+  const [name,             setName]             = useState(user.name   ?? '');
+  const [bio,              setBio]              = useState(user.bio    ?? '');
+  const [avatarPreview,    setAvatarPreview]    = useState<string | null>((user as User & { avatar?: string | null }).avatar ?? null);
+  const [bannerPreview,    setBannerPreview]    = useState<string | null>((user as User & { banner?: string | null }).banner ?? null);
+  const [newAvatarData,    setNewAvatarData]    = useState<string | undefined>(undefined);
+  const [newBannerData,    setNewBannerData]    = useState<string | undefined>(undefined);
+  const avatarInputRef = useRef<HTMLInputElement>(null);
+  const bannerInputRef = useRef<HTMLInputElement>(null);
   const utils = trpc.useUtils();
 
   const mutation = trpc.users.updateProfile.useMutation({
@@ -53,21 +55,23 @@ export default function EditProfileModal({ user, onClose, addToast }: EditProfil
     },
   });
 
-  const handleFileChange = useCallback(async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
+  const handleImageFile = useCallback(async (
+    file: File,
+    maxPx: number,
+    setPreview: (v: string) => void,
+    setData: (v: string) => void,
+  ) => {
     if (!file.type.startsWith('image/')) {
       addToast('Solo se permiten imágenes', 'error');
       return;
     }
     try {
-      const compressed = await compressImage(file);
-      setAvatarPreview(compressed);
-      setNewAvatarData(compressed);
+      const compressed = await compressImage(file, maxPx);
+      setPreview(compressed);
+      setData(compressed);
     } catch {
       addToast('Error al procesar la imagen', 'error');
     }
-    e.target.value = '';
   }, [addToast]);
 
   const handleSave = () => {
@@ -79,6 +83,7 @@ export default function EditProfileModal({ user, onClose, addToast }: EditProfil
       name:   name.trim(),
       bio:    bio.trim() || undefined,
       avatar: newAvatarData,
+      banner: newBannerData,
     });
   };
 
@@ -101,10 +106,52 @@ export default function EditProfileModal({ user, onClose, addToast }: EditProfil
         </div>
 
         <div className="px-5 py-5 space-y-5">
+          {/* Banner */}
+          <div>
+            <label className="block text-xs font-semibold text-[#5A6680] uppercase tracking-wider mb-1.5">
+              Portada
+            </label>
+            <button
+              onClick={() => bannerInputRef.current?.click()}
+              className="relative group w-full h-28 rounded-xl overflow-hidden block"
+              type="button"
+              title="Cambiar portada"
+            >
+              {bannerPreview ? (
+                <img src={bannerPreview} alt="" className="w-full h-full object-cover" />
+              ) : (
+                <div
+                  className="w-full h-full"
+                  style={{
+                    background: 'linear-gradient(135deg, #0A1020 0%, #111827 50%, #0A0E18 100%)',
+                    backgroundImage: 'radial-gradient(circle at 20% 50%, rgba(225,255,0,0.15) 0%, transparent 50%), radial-gradient(circle at 80% 20%, rgba(59,130,246,0.12) 0%, transparent 40%)',
+                  }}
+                />
+              )}
+              <div className="absolute inset-0 bg-black/50 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity rounded-xl">
+                <div className="flex items-center gap-2 text-[#f3f2f2] text-sm font-medium">
+                  <Camera size={18} />
+                  <span>Cambiar portada</span>
+                </div>
+              </div>
+            </button>
+            <input
+              ref={bannerInputRef}
+              type="file"
+              accept="image/*"
+              className="hidden"
+              onChange={(e) => {
+                const file = e.target.files?.[0];
+                if (file) handleImageFile(file, 1200, setBannerPreview, setNewBannerData);
+                e.target.value = '';
+              }}
+            />
+          </div>
+
           {/* Avatar */}
           <div className="flex justify-center">
             <button
-              onClick={() => fileInputRef.current?.click()}
+              onClick={() => avatarInputRef.current?.click()}
               className="relative group cursor-pointer"
               title="Cambiar foto de perfil"
               type="button"
@@ -125,11 +172,15 @@ export default function EditProfileModal({ user, onClose, addToast }: EditProfil
               </div>
             </button>
             <input
-              ref={fileInputRef}
+              ref={avatarInputRef}
               type="file"
               accept="image/*"
               className="hidden"
-              onChange={handleFileChange}
+              onChange={(e) => {
+                const file = e.target.files?.[0];
+                if (file) handleImageFile(file, 400, setAvatarPreview, setNewAvatarData);
+                e.target.value = '';
+              }}
             />
           </div>
 
