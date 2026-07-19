@@ -1,13 +1,13 @@
 import { createRouter, publicQuery, authedQuery } from "./middleware";
 import { listPosts, listPostsByUser, createPost, toggleLike, isLiked, deletePost, updatePost } from "./queries/posts";
-import { createPostSchema, toggleLikeSchema, isLikedSchema, deletePostSchema, listPostsByUserSchema, updatePostSchema } from "@contracts/schemas";
+import { listPostsSchema, createPostSchema, toggleLikeSchema, isLikedSchema, deletePostSchema, listPostsByUserSchema, updatePostSchema } from "@contracts/schemas";
 import { createNotification } from "./queries/notifications";
 
 export const postsRouter = createRouter({
-  list: publicQuery.query(() => listPosts()),
+  list: publicQuery.input(listPostsSchema).query(({ input }) => listPosts(input?.viewerUserId)),
 
   listByUser: publicQuery.input(listPostsByUserSchema).query(({ input }) =>
-    listPostsByUser(input.userId)
+    listPostsByUser(input.userId, input.viewerUserId)
   ),
 
   create: authedQuery.input(createPostSchema).mutation(({ ctx, input }) =>

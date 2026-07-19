@@ -49,7 +49,8 @@ export const searchUsersSchema    = z.object({ query: z.string().max(100) });
 export const toggleFollowSchema   = z.object({ followingId: z.number().int() });
 export const isFollowingSchema    = z.object({ followingId: z.number().int() });
 export const getUserProfileSchema = z.object({ userId: z.number().int() });
-export const listPostsByUserSchema = z.object({ userId: z.number().int() });
+export const listPostsSchema = z.object({ viewerUserId: z.number().int().optional() }).optional();
+export const listPostsByUserSchema = z.object({ userId: z.number().int(), viewerUserId: z.number().int().optional() });
 
 export const updateProfileSchema = z.object({
   name:   z.string().min(1).max(255).optional(),

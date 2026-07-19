@@ -53,7 +53,10 @@ export default function Dashboard() {
   const [visibleCount,  setVisibleCount]  = useState(PAGE_SIZE);
   const [savedPostIds,  setSavedPostIds]  = useState<Set<number>>(loadSavedIds);
 
-  const { data: postsList, isLoading: postsLoading } = trpc.posts.list.useQuery();
+  const { data: postsList, isLoading: postsLoading } = trpc.posts.list.useQuery(
+    user ? { viewerUserId: user.id } : undefined,
+    { refetchInterval: 15000 },
+  );
 
   // Open messages tab when navigated from a profile "Mensaje" button
   useEffect(() => {

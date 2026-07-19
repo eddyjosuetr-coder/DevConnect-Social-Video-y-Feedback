@@ -1,6 +1,6 @@
 import { eq, desc, and, sql } from "drizzle-orm";
 import { getDb } from "./connection";
-import { posts, postLikes, users } from "@db/schema";
+import { posts, postLikes, reposts, users } from "@db/schema";
 
 export type PostRow = {
   id: number;
@@ -17,6 +17,8 @@ export type PostRow = {
   authorId: number;
   authorName: string | null;
   authorAvatar: string | null;
+  isLikedByMe?: boolean;
+  isRepostedByMe?: boolean;
 };
 
 // ── Mock store ────────────────────────────────────────────────────────────────
@@ -62,14 +64,19 @@ const isMock = !process.env.DATABASE_URL;
 
 // ── Query functions ──────────────────────────────────────────────────────────
 
-export async function listPosts(): Promise<PostRow[]> {
+export async function listPosts(viewerUserId?: number): Promise<PostRow[]> {
   if (isMock) {
     return [...mockPosts]
       .sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime())
-      .map(({ userId: _uid, ...row }) => row);
+      .map(({ userId: _uid, ...row }) => ({
+        ...row,
+        isLikedByMe: viewerUserId ? mockLikes.has(`${viewerUserId}:${row.id}`) : false,
+        isRepostedByMe: false,
+      }));
   }
   const db = getDb();
-  return db
+  const safeViewerId = viewerUserId ?? 0;
+  const rows = await db
     .select({
       id: posts.id,
       content: posts.content,
@@ -85,21 +92,35 @@ export async function listPosts(): Promise<PostRow[]> {
       authorId: posts.userId,
       authorName: users.name,
       authorAvatar: users.avatar,
+      isLikedByMe: sql<number>`CASE WHEN ${postLikes.id} IS NOT NULL THEN 1 ELSE 0 END`,
+      isRepostedByMe: sql<number>`CASE WHEN ${reposts.id} IS NOT NULL THEN 1 ELSE 0 END`,
     })
     .from(posts)
     .leftJoin(users, eq(posts.userId, users.id))
+    .leftJoin(postLikes, and(eq(postLikes.postId, posts.id), eq(postLikes.userId, safeViewerId)))
+    .leftJoin(reposts, and(eq(reposts.postId, posts.id), eq(reposts.userId, safeViewerId)))
     .orderBy(desc(posts.createdAt));
+  return rows.map((row) => ({
+    ...row,
+    isLikedByMe: Boolean(row.isLikedByMe),
+    isRepostedByMe: Boolean(row.isRepostedByMe),
+  }));
 }
 
-export async function listPostsByUser(userId: number): Promise<PostRow[]> {
+export async function listPostsByUser(userId: number, viewerUserId?: number): Promise<PostRow[]> {
   if (isMock) {
     return [...mockPosts]
       .filter((p) => p.userId === userId)
       .sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime())
-      .map(({ userId: _uid, ...row }) => row);
+      .map(({ userId: _uid, ...row }) => ({
+        ...row,
+        isLikedByMe: viewerUserId ? mockLikes.has(`${viewerUserId}:${row.id}`) : false,
+        isRepostedByMe: false,
+      }));
   }
   const db = getDb();
-  return db
+  const safeViewerId = viewerUserId ?? 0;
+  const rows = await db
     .select({
       id: posts.id,
       content: posts.content,
@@ -115,11 +136,20 @@ export async function listPostsByUser(userId: number): Promise<PostRow[]> {
       authorId: posts.userId,
       authorName: users.name,
       authorAvatar: users.avatar,
+      isLikedByMe: sql<number>`CASE WHEN ${postLikes.id} IS NOT NULL THEN 1 ELSE 0 END`,
+      isRepostedByMe: sql<number>`CASE WHEN ${reposts.id} IS NOT NULL THEN 1 ELSE 0 END`,
     })
     .from(posts)
     .leftJoin(users, eq(posts.userId, users.id))
+    .leftJoin(postLikes, and(eq(postLikes.postId, posts.id), eq(postLikes.userId, safeViewerId)))
+    .leftJoin(reposts, and(eq(reposts.postId, posts.id), eq(reposts.userId, safeViewerId)))
     .where(eq(posts.userId, userId))
     .orderBy(desc(posts.createdAt));
+  return rows.map((row) => ({
+    ...row,
+    isLikedByMe: Boolean(row.isLikedByMe),
+    isRepostedByMe: Boolean(row.isRepostedByMe),
+  }));
 }
 
 export async function createPost(data: {

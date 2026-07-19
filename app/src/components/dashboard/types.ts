@@ -15,6 +15,8 @@ export type Post = {
   authorId: number;
   authorName: string | null;
   authorAvatar: string | null;
+  isLikedByMe?: boolean;
+  isRepostedByMe?: boolean;
 };
 
 export type Comment = {

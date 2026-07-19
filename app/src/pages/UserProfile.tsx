@@ -182,7 +182,7 @@ export default function UserProfile() {
     { enabled: !!userId && !Number.isNaN(userId) }
   );
   const { data: userPosts, isLoading: postsLoading } = trpc.posts.listByUser.useQuery(
-    { userId },
+    { userId, viewerUserId: me?.id },
     { enabled: !!userId && !Number.isNaN(userId) }
   );
   const { data: userReposts, isLoading: repostsLoading } = trpc.reposts.listByUser.useQuery(

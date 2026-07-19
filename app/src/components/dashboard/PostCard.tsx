@@ -42,9 +42,9 @@ export default function PostCard({ post, addToast, isSaved = false, onToggleSave
 
   const [commentsOpen, setCommentsOpen] = useState(false);
   const [likesCount, setLikesCount] = useState(post.likesCount);
-  const [isLiked, setIsLiked] = useState(false);
+  const [isLiked, setIsLiked] = useState(post.isLikedByMe ?? false);
   const [repostCount, setRepostCount] = useState(post.repostsCount);
-  const [isReposted, setIsReposted] = useState(false);
+  const [isReposted, setIsReposted] = useState(post.isRepostedByMe ?? false);
   const [codeCopied, setCodeCopied] = useState(false);
   const [repostPopoverOpen, setRepostPopoverOpen] = useState(false);
   const [quoteModalOpen, setQuoteModalOpen] = useState(false);
