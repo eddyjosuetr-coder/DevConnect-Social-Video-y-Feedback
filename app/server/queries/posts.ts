@@ -1,4 +1,4 @@
-import { eq, desc, and, sql } from "drizzle-orm";
+import { eq, desc, and, sql, alias } from "drizzle-orm";
 import { getDb } from "./connection";
 import { posts, postLikes, reposts, users } from "@db/schema";
 
@@ -19,6 +19,13 @@ export type PostRow = {
   authorAvatar: string | null;
   isLikedByMe?: boolean;
   isRepostedByMe?: boolean;
+  isRepostEntry?: boolean;
+  repostId?: number;
+  repostCreatedAt?: Date;
+  quoteText?: string | null;
+  reposterId?: number;
+  reposterName?: string | null;
+  reposterAvatar?: string | null;
 };
 
 // ── Mock store ────────────────────────────────────────────────────────────────
@@ -72,12 +79,16 @@ export async function listPosts(viewerUserId?: number): Promise<PostRow[]> {
         ...row,
         isLikedByMe: viewerUserId ? mockLikes.has(`${viewerUserId}:${row.id}`) : false,
         isRepostedByMe: false,
+        isRepostEntry: false,
       }));
   }
   const db = getDb();
   const safeViewerId = viewerUserId ?? 0;
-  const rows = await db
-    .select({
+  const reposterUsers = alias(users, 'reposter');
+
+  const [originalPosts, repostEntries] = await Promise.all([
+    // Original posts with viewer's liked/reposted status
+    db.select({
       id: posts.id,
       content: posts.content,
       code: posts.code,
@@ -98,13 +109,55 @@ export async function listPosts(viewerUserId?: number): Promise<PostRow[]> {
     .from(posts)
     .leftJoin(users, eq(posts.userId, users.id))
     .leftJoin(postLikes, and(eq(postLikes.postId, posts.id), eq(postLikes.userId, safeViewerId)))
-    .leftJoin(reposts, and(eq(reposts.postId, posts.id), eq(reposts.userId, safeViewerId)))
-    .orderBy(desc(posts.createdAt));
-  return rows.map((row) => ({
-    ...row,
-    isLikedByMe: Boolean(row.isLikedByMe),
-    isRepostedByMe: Boolean(row.isRepostedByMe),
-  }));
+    .leftJoin(reposts, and(eq(reposts.postId, posts.id), eq(reposts.userId, safeViewerId))),
+
+    // Repost feed entries (who shared what)
+    db.select({
+      id: posts.id,
+      content: posts.content,
+      code: posts.code,
+      codeLanguage: posts.codeLanguage,
+      tags: posts.tags,
+      mediaUrl: posts.mediaUrl,
+      mediaType: posts.mediaType,
+      likesCount: posts.likesCount,
+      commentsCount: posts.commentsCount,
+      repostsCount: posts.repostsCount,
+      createdAt: posts.createdAt,
+      authorId: posts.userId,
+      authorName: users.name,
+      authorAvatar: users.avatar,
+      repostId: reposts.id,
+      repostCreatedAt: reposts.createdAt,
+      quoteText: reposts.quoteText,
+      reposterId: reposts.userId,
+      reposterName: reposterUsers.name,
+      reposterAvatar: reposterUsers.avatar,
+    })
+    .from(reposts)
+    .innerJoin(posts, eq(reposts.postId, posts.id))
+    .innerJoin(users, eq(posts.userId, users.id))
+    .innerJoin(reposterUsers, eq(reposts.userId, reposterUsers.id)),
+  ]);
+
+  return [
+    ...originalPosts.map((r) => ({
+      ...r,
+      isLikedByMe: Boolean(r.isLikedByMe),
+      isRepostedByMe: Boolean(r.isRepostedByMe),
+      isRepostEntry: false as const,
+    })),
+    ...repostEntries.map((r) => ({
+      ...r,
+      isLikedByMe: false,
+      isRepostedByMe: false,
+      isRepostEntry: true as const,
+    })),
+  ].sort((a, b) => {
+    const dateA = a.isRepostEntry ? (a.repostCreatedAt ?? a.createdAt).getTime() : a.createdAt.getTime();
+    const dateB = b.isRepostEntry ? (b.repostCreatedAt ?? b.createdAt).getTime() : b.createdAt.getTime();
+    return dateB - dateA;
+  });
 }
 
 export async function listPostsByUser(userId: number, viewerUserId?: number): Promise<PostRow[]> {

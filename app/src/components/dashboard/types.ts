@@ -17,6 +17,13 @@ export type Post = {
   authorAvatar: string | null;
   isLikedByMe?: boolean;
   isRepostedByMe?: boolean;
+  isRepostEntry?: boolean;
+  repostId?: number;
+  repostCreatedAt?: Date | string | null;
+  quoteText?: string | null;
+  reposterId?: number;
+  reposterName?: string | null;
+  reposterAvatar?: string | null;
 };
 
 export type Comment = {

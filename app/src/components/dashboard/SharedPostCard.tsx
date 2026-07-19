@@ -26,6 +26,8 @@ interface SharedPostCardProps {
   quoteText: string | null;
   post: Post;
   addToast: (message: string, type: Toast['type']) => void;
+  reposterName?: string | null;
+  reposterAvatar?: string | null;
 }
 
 export default function SharedPostCard({
@@ -33,6 +35,8 @@ export default function SharedPostCard({
   quoteText,
   post,
   addToast,
+  reposterName,
+  reposterAvatar,
 }: SharedPostCardProps) {
   const navigate = useNavigate();
   const [codeCopied, setCodeCopied] = useState(false);
@@ -55,9 +59,20 @@ export default function SharedPostCard({
     >
       {/* Repost header */}
       <div className="flex items-center gap-1.5 mb-3 text-xs text-[#5A6680]">
-        <Repeat2 size={12} className="text-[#22C55E]" />
-        <span className="text-[#22C55E] font-semibold">
-          {quoteText ? 'Citó esta publicación' : 'Compartido'}
+        {reposterAvatar ? (
+          <img src={reposterAvatar} alt="" className="w-4 h-4 rounded-full object-cover shrink-0" />
+        ) : reposterName ? (
+          <div className="w-4 h-4 rounded-full bg-[#22C55E]/20 flex items-center justify-center shrink-0">
+            <span className="text-[7px] text-[#22C55E] font-bold">{reposterName.charAt(0)}</span>
+          </div>
+        ) : (
+          <Repeat2 size={12} className="text-[#22C55E] shrink-0" />
+        )}
+        {reposterName && (
+          <span className="text-[#f3f2f2] font-semibold truncate max-w-[120px]">{reposterName}</span>
+        )}
+        <span className="text-[#22C55E] font-semibold shrink-0">
+          {quoteText ? 'citó esta publicación' : (reposterName ? 'compartió' : 'Compartido')}
         </span>
         <span className="text-[#2A3347]">·</span>
         <span className="font-mono">{formatDate(repostCreatedAt)}</span>

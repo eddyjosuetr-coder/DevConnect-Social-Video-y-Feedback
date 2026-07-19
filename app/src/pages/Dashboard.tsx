@@ -9,6 +9,7 @@ import DashboardSidebar from '@/components/dashboard/DashboardSidebar';
 import DashboardRightSidebar from '@/components/dashboard/DashboardRightSidebar';
 import CreatePostForm from '@/components/dashboard/CreatePostForm';
 import PostCard from '@/components/dashboard/PostCard';
+import SharedPostCard from '@/components/dashboard/SharedPostCard';
 import ExploreTab from '@/components/dashboard/ExploreTab';
 import NotificationsTab from '@/components/dashboard/NotificationsTab';
 import MessagesTab from '@/components/dashboard/MessagesTab';
@@ -223,15 +224,28 @@ export default function Dashboard() {
                 </div>
               )}
 
-              {visiblePosts.map((post) => (
-                <PostCard
-                  key={post.id}
-                  post={post}
-                  addToast={addToast}
-                  isSaved={savedPostIds.has(post.id)}
-                  onToggleSave={() => handleToggleSave(post.id)}
-                />
-              ))}
+              {visiblePosts.map((item) =>
+                item.isRepostEntry ? (
+                  <SharedPostCard
+                    key={`r-${item.repostId ?? item.id}`}
+                    repostId={item.repostId!}
+                    repostCreatedAt={item.repostCreatedAt!}
+                    quoteText={item.quoteText ?? null}
+                    post={item}
+                    reposterName={item.reposterName ?? null}
+                    reposterAvatar={item.reposterAvatar ?? null}
+                    addToast={addToast}
+                  />
+                ) : (
+                  <PostCard
+                    key={`p-${item.id}`}
+                    post={item}
+                    addToast={addToast}
+                    isSaved={savedPostIds.has(item.id)}
+                    onToggleSave={() => handleToggleSave(item.id)}
+                  />
+                )
+              )}
 
               {hasMore && (
                 <div className="py-6 text-center border-b border-[#2A3347]">
@@ -270,7 +284,7 @@ export default function Dashboard() {
           {/* ── BOOKMARKS TAB ────────────────────────────────── */}
           {activeTab === 'bookmarks' && (
             <BookmarksTab
-              postsList={allPosts}
+              postsList={allPosts.filter((p) => !p.isRepostEntry)}
               savedPostIds={savedPostIds}
               onToggleSave={handleToggleSave}
               addToast={addToast}
@@ -281,7 +295,7 @@ export default function Dashboard() {
           {activeTab === 'profile' && (
             <ProfileTab
               user={user}
-              postsList={allPosts}
+              postsList={allPosts.filter((p) => !p.isRepostEntry)}
               savedPostIds={savedPostIds}
               onToggleSave={handleToggleSave}
               addToast={addToast}
