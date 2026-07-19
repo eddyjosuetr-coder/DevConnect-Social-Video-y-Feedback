@@ -1,4 +1,4 @@
-import { eq, desc, and, sql, alias } from "drizzle-orm";
+import { eq, desc, and, sql } from "drizzle-orm";
 import { getDb } from "./connection";
 import { posts, postLikes, reposts, users } from "@db/schema";
 
@@ -84,7 +84,6 @@ export async function listPosts(viewerUserId?: number): Promise<PostRow[]> {
   }
   const db = getDb();
   const safeViewerId = viewerUserId ?? 0;
-  const reposterUsers = alias(users, 'reposter');
 
   const [originalPosts, repostEntries] = await Promise.all([
     // Original posts with viewer's liked/reposted status
@@ -131,13 +130,12 @@ export async function listPosts(viewerUserId?: number): Promise<PostRow[]> {
       repostCreatedAt: reposts.createdAt,
       quoteText: reposts.quoteText,
       reposterId: reposts.userId,
-      reposterName: reposterUsers.name,
-      reposterAvatar: reposterUsers.avatar,
+      reposterName: sql<string | null>`(SELECT name FROM \`users\` WHERE id = ${reposts.userId})`,
+      reposterAvatar: sql<string | null>`(SELECT avatar FROM \`users\` WHERE id = ${reposts.userId})`,
     })
     .from(reposts)
     .innerJoin(posts, eq(reposts.postId, posts.id))
-    .innerJoin(users, eq(posts.userId, users.id))
-    .innerJoin(reposterUsers, eq(reposts.userId, reposterUsers.id)),
+    .innerJoin(users, eq(posts.userId, users.id)),
   ]);
 
   return [
