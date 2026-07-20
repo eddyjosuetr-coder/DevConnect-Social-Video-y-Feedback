@@ -78,6 +78,13 @@ export function getDb() {
         createdAt TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
         UNIQUE KEY follows_follower_following_idx (followerId, followingId)
       )`);
+      await run(`CREATE TABLE IF NOT EXISTS bookmarks (
+        id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+        userId BIGINT UNSIGNED NOT NULL,
+        postId BIGINT UNSIGNED NOT NULL,
+        createdAt TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        UNIQUE KEY bookmarks_user_post_idx (userId, postId)
+      )`);
     })();
   }
   return instance;
