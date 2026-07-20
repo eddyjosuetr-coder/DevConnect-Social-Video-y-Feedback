@@ -58,3 +58,12 @@ export const updateProfileSchema = z.object({
   avatar: z.string().max(600000).optional(),
   banner: z.string().max(2000000).optional(),
 });
+
+export const getPostSchema = z.object({ postId: z.number().int() });
+export const listByTagSchema = z.object({ tag: z.string().max(100) });
+
+export const toggleBookmarkSchema = z.object({ postId: z.number().int() });
+export const listBookmarksSchema = z.object({ viewerUserId: z.number().int().optional() }).optional();
+
+export const getSuggestedUsersSchema = z.object({ limit: z.number().int().max(50).optional() });
+export const getTrendingTagsSchema = z.object({ limit: z.number().int().max(50).optional() });

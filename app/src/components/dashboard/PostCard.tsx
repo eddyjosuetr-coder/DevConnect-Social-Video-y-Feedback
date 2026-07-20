@@ -320,6 +320,7 @@ export default function PostCard({ post, addToast, isSaved = false, onToggleSave
               {localPost.tags.split(',').map((t) => t.trim()).filter(Boolean).map((tag) => (
                 <span
                   key={tag}
+                  onClick={() => navigate(`/tag/${tag}`)}
                   className="text-xs font-mono text-[#3B82F6] bg-[#3B82F6]/8 border border-[#3B82F6]/15 px-2 py-0.5 rounded cursor-pointer hover:bg-[#3B82F6]/15 transition-colors"
                 >
                   #{tag}

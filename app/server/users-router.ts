@@ -1,7 +1,7 @@
 import { TRPCError } from "@trpc/server";
 import { createRouter, publicQuery, authedQuery } from "./middleware";
-import { updateProfileSchema, getUserProfileSchema, searchUsersSchema } from "@contracts/schemas";
-import { updateUserProfile, findUserById, searchUsers } from "./queries/users";
+import { updateProfileSchema, getUserProfileSchema, searchUsersSchema, getSuggestedUsersSchema, getTrendingTagsSchema } from "@contracts/schemas";
+import { updateUserProfile, findUserById, searchUsers, getTrendingTags, getSuggestedUsers } from "./queries/users";
 import { getFollowerCount, getFollowingCount } from "./queries/follows";
 
 export const usersRouter = createRouter({
@@ -39,4 +39,12 @@ export const usersRouter = createRouter({
       });
       return { success: true };
     }),
+
+  trendingTags: publicQuery.input(getTrendingTagsSchema).query(({ input }) =>
+    getTrendingTags(input?.limit ?? 10)
+  ),
+
+  suggestedUsers: authedQuery.input(getSuggestedUsersSchema).query(({ ctx, input }) =>
+    getSuggestedUsers(input?.limit ?? 5, ctx.user.id)
+  ),
 });

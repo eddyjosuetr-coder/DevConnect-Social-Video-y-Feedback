@@ -1,6 +1,6 @@
-import { eq, desc, and, sql } from "drizzle-orm";
+import { eq, desc, and, sql, inArray } from "drizzle-orm";
 import { getDb } from "./connection";
-import { posts, postLikes, reposts, users } from "@db/schema";
+import { posts, postLikes, reposts, users, follows } from "@db/schema";
 
 export type PostRow = {
   id: number;
@@ -292,6 +292,141 @@ export async function deletePost(postId: number, userId: number): Promise<{ succ
   const db = getDb();
   await db.delete(posts).where(and(eq(posts.id, postId), eq(posts.userId, userId)));
   return { success: true };
+}
+
+// ── listFeed — posts from followed users + own, fallback to all ───────────────
+export async function listFeed(viewerUserId: number): Promise<PostRow[]> {
+  if (isMock) return listPosts(viewerUserId);
+  const db = getDb();
+
+  const followedRows = await db
+    .select({ followingId: follows.followingId })
+    .from(follows)
+    .where(eq(follows.followerId, viewerUserId));
+
+  const followedIds = followedRows.map((r) => r.followingId);
+  if (followedIds.length === 0) return listPosts(viewerUserId);
+
+  const feedUserIds = [...followedIds, viewerUserId];
+  const sv = viewerUserId;
+
+  const [originalPosts, repostEntries] = await Promise.all([
+    db.select({
+      id: posts.id, content: posts.content, code: posts.code,
+      codeLanguage: posts.codeLanguage, tags: posts.tags,
+      mediaUrl: posts.mediaUrl, mediaType: posts.mediaType,
+      likesCount: posts.likesCount, commentsCount: posts.commentsCount,
+      repostsCount: posts.repostsCount, createdAt: posts.createdAt,
+      authorId: posts.userId, authorName: users.name, authorAvatar: users.avatar,
+      isLikedByMe: sql<number>`CASE WHEN ${postLikes.id} IS NOT NULL THEN 1 ELSE 0 END`,
+      isRepostedByMe: sql<number>`CASE WHEN ${reposts.id} IS NOT NULL THEN 1 ELSE 0 END`,
+    })
+    .from(posts)
+    .leftJoin(users, eq(posts.userId, users.id))
+    .leftJoin(postLikes, and(eq(postLikes.postId, posts.id), eq(postLikes.userId, sv)))
+    .leftJoin(reposts, and(eq(reposts.postId, posts.id), eq(reposts.userId, sv)))
+    .where(inArray(posts.userId, feedUserIds)),
+
+    db.select({
+      id: posts.id, content: posts.content, code: posts.code,
+      codeLanguage: posts.codeLanguage, tags: posts.tags,
+      mediaUrl: posts.mediaUrl, mediaType: posts.mediaType,
+      likesCount: posts.likesCount, commentsCount: posts.commentsCount,
+      repostsCount: posts.repostsCount, createdAt: posts.createdAt,
+      authorId: posts.userId, authorName: users.name, authorAvatar: users.avatar,
+      repostId: reposts.id, repostCreatedAt: reposts.createdAt,
+      quoteText: reposts.quoteText, reposterId: reposts.userId,
+      reposterName: sql<string | null>`(SELECT name FROM \`users\` WHERE id = ${reposts.userId})`,
+      reposterAvatar: sql<string | null>`(SELECT avatar FROM \`users\` WHERE id = ${reposts.userId})`,
+    })
+    .from(reposts)
+    .innerJoin(posts, eq(reposts.postId, posts.id))
+    .innerJoin(users, eq(posts.userId, users.id))
+    .where(inArray(reposts.userId, feedUserIds)),
+  ]);
+
+  return [
+    ...originalPosts.map((r) => ({
+      ...r, isLikedByMe: Boolean(r.isLikedByMe),
+      isRepostedByMe: Boolean(r.isRepostedByMe), isRepostEntry: false as const,
+    })),
+    ...repostEntries.map((r) => ({
+      ...r, isLikedByMe: false, isRepostedByMe: false, isRepostEntry: true as const,
+    })),
+  ].sort((a, b) => {
+    const dateA = a.isRepostEntry ? (a.repostCreatedAt ?? a.createdAt).getTime() : a.createdAt.getTime();
+    const dateB = b.isRepostEntry ? (b.repostCreatedAt ?? b.createdAt).getTime() : b.createdAt.getTime();
+    return dateB - dateA;
+  });
+}
+
+// ── getPostById ───────────────────────────────────────────────────────────────
+export async function getPostById(postId: number, viewerUserId?: number): Promise<PostRow | null> {
+  if (isMock) {
+    const p = mockPosts.find((m) => m.id === postId);
+    if (!p) return null;
+    const { userId: _uid, ...row } = p;
+    return { ...row, isLikedByMe: false, isRepostedByMe: false, isRepostEntry: false };
+  }
+  const db = getDb();
+  const sv = viewerUserId ?? 0;
+  const rows = await db.select({
+    id: posts.id, content: posts.content, code: posts.code,
+    codeLanguage: posts.codeLanguage, tags: posts.tags,
+    mediaUrl: posts.mediaUrl, mediaType: posts.mediaType,
+    likesCount: posts.likesCount, commentsCount: posts.commentsCount,
+    repostsCount: posts.repostsCount, createdAt: posts.createdAt,
+    authorId: posts.userId, authorName: users.name, authorAvatar: users.avatar,
+    isLikedByMe: sql<number>`CASE WHEN ${postLikes.id} IS NOT NULL THEN 1 ELSE 0 END`,
+    isRepostedByMe: sql<number>`CASE WHEN ${reposts.id} IS NOT NULL THEN 1 ELSE 0 END`,
+  })
+  .from(posts)
+  .leftJoin(users, eq(posts.userId, users.id))
+  .leftJoin(postLikes, and(eq(postLikes.postId, posts.id), eq(postLikes.userId, sv)))
+  .leftJoin(reposts, and(eq(reposts.postId, posts.id), eq(reposts.userId, sv)))
+  .where(eq(posts.id, postId))
+  .limit(1);
+  if (!rows[0]) return null;
+  return {
+    ...rows[0],
+    isLikedByMe: Boolean(rows[0].isLikedByMe),
+    isRepostedByMe: Boolean(rows[0].isRepostedByMe),
+    isRepostEntry: false as const,
+  };
+}
+
+// ── listPostsByTag ────────────────────────────────────────────────────────────
+export async function listPostsByTag(tag: string, viewerUserId?: number): Promise<PostRow[]> {
+  if (isMock) {
+    return [...mockPosts]
+      .filter((p) => p.tags?.split(',').map((t) => t.trim()).includes(tag))
+      .sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime())
+      .map(({ userId: _uid, ...row }) => ({
+        ...row, isLikedByMe: false, isRepostedByMe: false, isRepostEntry: false,
+      }));
+  }
+  const db = getDb();
+  const sv = viewerUserId ?? 0;
+  const rows = await db.select({
+    id: posts.id, content: posts.content, code: posts.code,
+    codeLanguage: posts.codeLanguage, tags: posts.tags,
+    mediaUrl: posts.mediaUrl, mediaType: posts.mediaType,
+    likesCount: posts.likesCount, commentsCount: posts.commentsCount,
+    repostsCount: posts.repostsCount, createdAt: posts.createdAt,
+    authorId: posts.userId, authorName: users.name, authorAvatar: users.avatar,
+    isLikedByMe: sql<number>`CASE WHEN ${postLikes.id} IS NOT NULL THEN 1 ELSE 0 END`,
+    isRepostedByMe: sql<number>`CASE WHEN ${reposts.id} IS NOT NULL THEN 1 ELSE 0 END`,
+  })
+  .from(posts)
+  .leftJoin(users, eq(posts.userId, users.id))
+  .leftJoin(postLikes, and(eq(postLikes.postId, posts.id), eq(postLikes.userId, sv)))
+  .leftJoin(reposts, and(eq(reposts.postId, posts.id), eq(reposts.userId, sv)))
+  .where(sql`FIND_IN_SET(${tag}, ${posts.tags}) > 0`)
+  .orderBy(desc(posts.createdAt));
+  return rows.map((r) => ({
+    ...r, isLikedByMe: Boolean(r.isLikedByMe),
+    isRepostedByMe: Boolean(r.isRepostedByMe), isRepostEntry: false as const,
+  }));
 }
 
 export async function updatePost(

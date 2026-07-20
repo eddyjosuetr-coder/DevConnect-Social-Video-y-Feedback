@@ -97,6 +97,16 @@ export const notifications = mysqlTable("notifications", {
   createdAt: timestamp("createdAt").defaultNow().notNull(),
 });
 
+// ── Bookmarks ──
+export const bookmarks = mysqlTable("bookmarks", {
+  id: serial("id").primaryKey(),
+  userId: bigint("userId", { mode: "number", unsigned: true }).notNull(),
+  postId: bigint("postId", { mode: "number", unsigned: true }).notNull(),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+}, (table) => ({
+  userPostUnique: uniqueIndex("bookmarks_user_post_idx").on(table.userId, table.postId),
+}));
+
 // ── Follows ──
 export const follows = mysqlTable("follows", {
   id: serial("id").primaryKey(),

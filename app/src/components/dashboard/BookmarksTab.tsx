@@ -1,17 +1,36 @@
 import { Bookmark } from 'lucide-react';
+import { trpc } from '@/providers/trpc';
 import PostCard from './PostCard';
-import type { Post } from './types';
 import type { Toast } from '@/hooks/useToast';
 
 interface BookmarksTabProps {
-  postsList: Post[];
-  savedPostIds: Set<number>;
-  onToggleSave: (postId: number) => void;
   addToast: (message: string, type: Toast['type']) => void;
 }
 
-export default function BookmarksTab({ postsList, savedPostIds, onToggleSave, addToast }: BookmarksTabProps) {
-  const savedPosts = postsList.filter((p) => savedPostIds.has(p.id));
+export default function BookmarksTab({ addToast }: BookmarksTabProps) {
+  const utils = trpc.useUtils();
+
+  const { data: savedPosts = [], isLoading } = trpc.bookmarks.list.useQuery(undefined, {
+    staleTime: 30000,
+  });
+
+  const toggle = trpc.bookmarks.toggle.useMutation({
+    onSuccess: () => {
+      void utils.bookmarks.list.invalidate();
+      void utils.bookmarks.bookmarkedIds.invalidate();
+    },
+  });
+
+  const { data: bookmarkedIds = [] } = trpc.bookmarks.bookmarkedIds.useQuery();
+  const bookmarkedSet = new Set<number>(bookmarkedIds);
+
+  if (isLoading) {
+    return (
+      <div className="flex justify-center py-20">
+        <div className="w-8 h-8 border-2 border-[#e1ff00] border-t-transparent rounded-full animate-spin" />
+      </div>
+    );
+  }
 
   if (savedPosts.length === 0) {
     return (
@@ -24,7 +43,6 @@ export default function BookmarksTab({ postsList, savedPostIds, onToggleSave, ad
           Guarda posts interesantes tocando el icono{' '}
           <Bookmark size={12} className="inline align-middle" /> en cualquier post del feed.
         </p>
-        <p className="text-[#5A6680] text-xs mt-3">Los guardados persisten entre sesiones.</p>
       </div>
     );
   }
@@ -41,8 +59,11 @@ export default function BookmarksTab({ postsList, savedPostIds, onToggleSave, ad
           key={post.id}
           post={post}
           addToast={addToast}
-          isSaved={true}
-          onToggleSave={() => onToggleSave(post.id)}
+          isSaved={bookmarkedSet.has(post.id)}
+          onToggleSave={() => {
+            toggle.mutate({ postId: post.id });
+            addToast(bookmarkedSet.has(post.id) ? 'Quitaste de guardados' : 'Post guardado!', 'success');
+          }}
         />
       ))}
     </div>

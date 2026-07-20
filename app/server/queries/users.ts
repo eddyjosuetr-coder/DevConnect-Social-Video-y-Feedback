@@ -1,4 +1,4 @@
-import { eq, like } from "drizzle-orm";
+import { eq, like, sql, desc, notInArray } from "drizzle-orm";
 import * as schema from "@db/schema";
 import type { InsertUser, User } from "@db/schema";
 import { getDb } from "./connection";
@@ -76,6 +76,63 @@ export async function searchUsers(query: string): Promise<Array<{ id: number; na
     .from(schema.users)
     .where(like(schema.users.name, `%${query}%`))
     .limit(10);
+}
+
+export async function getTrendingTags(limit = 10): Promise<Array<{ tag: string; count: number }>> {
+  if (isMock) {
+    return [
+      { tag: "typescript", count: 42 },
+      { tag: "react", count: 38 },
+      { tag: "nextjs", count: 29 },
+      { tag: "nodejs", count: 25 },
+      { tag: "css", count: 20 },
+    ].slice(0, limit);
+  }
+  const db = getDb();
+  const rows = await db.execute(sql`
+    SELECT tag, COUNT(*) AS count
+    FROM (
+      SELECT TRIM(SUBSTRING_INDEX(SUBSTRING_INDEX(tags, ',', n.n), ',', -1)) AS tag
+      FROM \`posts\`
+      CROSS JOIN (
+        SELECT 1 AS n UNION ALL SELECT 2 UNION ALL SELECT 3
+        UNION ALL SELECT 4 UNION ALL SELECT 5
+      ) n
+      WHERE n.n <= 1 + (LENGTH(tags) - LENGTH(REPLACE(tags, ',', '')))
+        AND tags IS NOT NULL AND tags != ''
+    ) t
+    WHERE tag != ''
+    GROUP BY tag
+    ORDER BY count DESC
+    LIMIT ${limit}
+  `);
+  return (rows as unknown as Array<{ tag: string; count: string | number }>).map((r) => ({
+    tag: r.tag,
+    count: Number(r.count),
+  }));
+}
+
+export async function getSuggestedUsers(
+  limit = 5,
+  excludeUserId?: number,
+): Promise<Array<{ id: number; name: string | null; avatar: string | null; bio: string | null }>> {
+  if (isMock) {
+    return [...mockUserById.values()]
+      .filter((u) => u.id !== excludeUserId)
+      .slice(0, limit)
+      .map((u) => ({ id: u.id, name: u.name, avatar: u.avatar, bio: u.bio }));
+  }
+  const db = getDb();
+  const query = db
+    .select({ id: schema.users.id, name: schema.users.name, avatar: schema.users.avatar, bio: schema.users.bio })
+    .from(schema.users)
+    .orderBy(desc(schema.users.createdAt))
+    .limit(limit);
+
+  if (excludeUserId) {
+    return query.where(notInArray(schema.users.id, [excludeUserId]));
+  }
+  return query;
 }
 
 export async function upsertUser(data: InsertUser): Promise<void> {

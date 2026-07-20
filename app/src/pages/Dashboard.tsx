@@ -15,7 +15,7 @@ import NotificationsTab from '@/components/dashboard/NotificationsTab';
 import MessagesTab from '@/components/dashboard/MessagesTab';
 import BookmarksTab from '@/components/dashboard/BookmarksTab';
 import ProfileTab from '@/components/dashboard/ProfileTab';
-import { TRENDING_TOPICS, SUGGESTED_USERS, type ActiveTab } from '@/components/dashboard/types';
+import type { ActiveTab } from '@/components/dashboard/types';
 
 const TAB_LABELS: Record<ActiveTab, string> = {
   feed:          'Inicio',
@@ -27,15 +27,6 @@ const TAB_LABELS: Record<ActiveTab, string> = {
 };
 
 const PAGE_SIZE = 10;
-const STORAGE_KEY = 'devconnect_saved_posts';
-
-function loadSavedIds(): Set<number> {
-  try {
-    const raw = localStorage.getItem(STORAGE_KEY);
-    if (raw) return new Set<number>(JSON.parse(raw) as number[]);
-  } catch {}
-  return new Set<number>();
-}
 
 type MessagePartner = { id: number; name: string | null; avatar: string | null };
 
@@ -43,20 +34,20 @@ export default function Dashboard() {
   const { user, isLoading, isAuthenticated, logout } = useAuth({ redirectOnUnauthenticated: true, redirectPath: '/' });
   const { toasts, addToast, removeToast } = useToast();
   const location = useLocation();
+  const utils = trpc.useUtils();
 
   const [activeTab,       setActiveTab]       = useState<ActiveTab>('feed');
   const [initialPartner,  setInitialPartner]  = useState<MessagePartner | null>(null);
   const handledState = useRef(false);
-  const [showPost,     setShowPost]     = useState(false);
-  const [mobileSidebar, setMobileSidebar] = useState(false);
-  const [followedUsers, setFollowedUsers] = useState<Set<string>>(new Set());
-  const [searchQuery,   setSearchQuery]   = useState('');
-  const [visibleCount,  setVisibleCount]  = useState(PAGE_SIZE);
-  const [savedPostIds,  setSavedPostIds]  = useState<Set<number>>(loadSavedIds);
+  const [showPost,       setShowPost]       = useState(false);
+  const [mobileSidebar,  setMobileSidebar]  = useState(false);
+  const [searchQuery,    setSearchQuery]    = useState('');
+  const [visibleCount,   setVisibleCount]   = useState(PAGE_SIZE);
 
-  const { data: postsList, isLoading: postsLoading } = trpc.posts.list.useQuery(
-    user ? { viewerUserId: user.id } : undefined,
-    { refetchInterval: 15000 },
+  // ── Data queries ──────────────────────────────────────────────────────────
+  const { data: feedPosts = [], isLoading: postsLoading } = trpc.posts.feed.useQuery(
+    undefined,
+    { refetchInterval: 15000, enabled: !!user },
   );
 
   const { data: unreadNotifCount = 0 } = trpc.notifications.unreadCount.useQuery(
@@ -69,7 +60,20 @@ export default function Dashboard() {
     { refetchInterval: 15000, enabled: !!user },
   );
 
-  // Open messages tab when navigated from a profile "Mensaje" button
+  const { data: bookmarkedIds = [] } = trpc.bookmarks.bookmarkedIds.useQuery(
+    undefined,
+    { enabled: !!user },
+  );
+  const bookmarkedSet = new Set<number>(bookmarkedIds);
+
+  const toggleBookmark = trpc.bookmarks.toggle.useMutation({
+    onSuccess: () => {
+      void utils.bookmarks.bookmarkedIds.invalidate();
+      void utils.bookmarks.list.invalidate();
+    },
+  });
+
+  // ── Navigation state ──────────────────────────────────────────────────────
   useEffect(() => {
     if (handledState.current) return;
     const state = location.state as { openMessages?: boolean; partner?: MessagePartner } | null;
@@ -80,41 +84,11 @@ export default function Dashboard() {
     }
   }, [location.state]);
 
-  // Persist bookmarks to localStorage whenever they change
-  useEffect(() => {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify([...savedPostIds]));
-  }, [savedPostIds]);
-
-  // Reset pagination when search changes or tab changes
   useEffect(() => { setVisibleCount(PAGE_SIZE); }, [searchQuery, activeTab]);
 
-  const toggleFollow = (name: string) => {
-    setFollowedUsers((prev) => {
-      const next = new Set(prev);
-      if (next.has(name)) { next.delete(name); addToast(`Dejaste de seguir a ${name}`, 'info'); }
-      else { next.add(name); addToast(`Ahora sigues a ${name}`, 'success'); }
-      return next;
-    });
-  };
-
-  const handleToggleSave = (postId: number) => {
-    setSavedPostIds((prev) => {
-      const next = new Set(prev);
-      if (next.has(postId)) next.delete(postId);
-      else next.add(postId);
-      return next;
-    });
-  };
-
-  const handleSearch = (q: string) => {
-    setSearchQuery(q);
-    if (q && activeTab !== 'feed') setActiveTab('feed');
-  };
-
-  const allPosts = postsList ?? [];
-
+  // ── Feed filtering ─────────────────────────────────────────────────────────
   const filteredPosts = searchQuery.trim()
-    ? allPosts.filter((p) => {
+    ? feedPosts.filter((p) => {
         const q = searchQuery.toLowerCase();
         return (
           p.content?.toLowerCase().includes(q) ||
@@ -123,10 +97,15 @@ export default function Dashboard() {
           p.codeLanguage?.toLowerCase().includes(q)
         );
       })
-    : allPosts;
+    : feedPosts;
 
   const visiblePosts = filteredPosts.slice(0, visibleCount);
   const hasMore = visibleCount < filteredPosts.length;
+
+  const handleSearch = (q: string) => {
+    setSearchQuery(q);
+    if (q && activeTab !== 'feed') setActiveTab('feed');
+  };
 
   if (isLoading) {
     return (
@@ -171,9 +150,7 @@ export default function Dashboard() {
 
         {/* Desktop Header */}
         <div className="hidden lg:flex items-center justify-between px-5 py-3.5 border-b border-[#1E2535] sticky top-0 bg-[#060911]/95 backdrop-blur-sm z-30">
-          <div className="flex items-center gap-2">
-            <h2 className="text-[#f3f2f2] font-black text-lg tracking-tight">{TAB_LABELS[activeTab]}</h2>
-          </div>
+          <h2 className="text-[#f3f2f2] font-black text-lg tracking-tight">{TAB_LABELS[activeTab]}</h2>
           {searchQuery && activeTab === 'feed' && (
             <span className="text-xs text-[#5A6680]">
               {filteredPosts.length} resultado{filteredPosts.length !== 1 ? 's' : ''} para &ldquo;{searchQuery}&rdquo;
@@ -253,8 +230,8 @@ export default function Dashboard() {
                     key={`p-${item.id}`}
                     post={item}
                     addToast={addToast}
-                    isSaved={savedPostIds.has(item.id)}
-                    onToggleSave={() => handleToggleSave(item.id)}
+                    isSaved={bookmarkedSet.has(item.id)}
+                    onToggleSave={() => toggleBookmark.mutate({ postId: item.id })}
                   />
                 )
               )}
@@ -273,14 +250,7 @@ export default function Dashboard() {
           )}
 
           {/* ── EXPLORE TAB ──────────────────────────────────── */}
-          {activeTab === 'explore' && (
-            <ExploreTab
-              trendingTopics={TRENDING_TOPICS}
-              suggestedUsers={SUGGESTED_USERS}
-              followedUsers={followedUsers}
-              onToggleFollow={toggleFollow}
-            />
-          )}
+          {activeTab === 'explore' && <ExploreTab addToast={addToast} />}
 
           {/* ── NOTIFICATIONS TAB ────────────────────────────── */}
           {activeTab === 'notifications' && <NotificationsTab />}
@@ -294,22 +264,15 @@ export default function Dashboard() {
           )}
 
           {/* ── BOOKMARKS TAB ────────────────────────────────── */}
-          {activeTab === 'bookmarks' && (
-            <BookmarksTab
-              postsList={allPosts.filter((p) => !p.isRepostEntry)}
-              savedPostIds={savedPostIds}
-              onToggleSave={handleToggleSave}
-              addToast={addToast}
-            />
-          )}
+          {activeTab === 'bookmarks' && <BookmarksTab addToast={addToast} />}
 
           {/* ── PROFILE TAB ──────────────────────────────────── */}
           {activeTab === 'profile' && (
             <ProfileTab
               user={user}
-              postsList={allPosts.filter((p) => !p.isRepostEntry)}
-              savedPostIds={savedPostIds}
-              onToggleSave={handleToggleSave}
+              postsList={feedPosts.filter((p) => !p.isRepostEntry)}
+              savedPostIds={bookmarkedSet}
+              onToggleSave={(postId) => toggleBookmark.mutate({ postId })}
               addToast={addToast}
             />
           )}
@@ -317,12 +280,9 @@ export default function Dashboard() {
       </main>
 
       <DashboardRightSidebar
-        trendingTopics={TRENDING_TOPICS}
-        suggestedUsers={SUGGESTED_USERS}
-        followedUsers={followedUsers}
-        onToggleFollow={toggleFollow}
         searchQuery={searchQuery}
         onSearch={handleSearch}
+        addToast={addToast}
       />
 
       <ToastContainer toasts={toasts} onRemove={removeToast} />
