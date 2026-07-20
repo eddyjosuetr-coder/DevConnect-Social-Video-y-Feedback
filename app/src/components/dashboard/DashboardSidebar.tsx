@@ -20,6 +20,8 @@ interface DashboardSidebarProps {
   onLogout: () => void;
   mobileSidebar: boolean;
   onCloseMobile: () => void;
+  unreadNotifCount: number;
+  unreadMsgCount: number;
 }
 
 function CursorBlink() {
@@ -47,7 +49,29 @@ function Avatar({ user, size = 10 }: { user: AuthUser; size?: number }) {
   );
 }
 
-function NavItem({ item, active, onClick }: { item: typeof NAV_ITEMS[0]; active: boolean; onClick: () => void }) {
+function UnreadBadge({ count }: { count: number }) {
+  if (count <= 0) return null;
+  const label = count >= 10 ? '9+' : String(count);
+  return (
+    <span className="ml-auto min-w-[18px] h-[18px] px-1 rounded-full bg-[#EF4444] flex items-center justify-center text-[10px] font-black text-white leading-none">
+      {label}
+    </span>
+  );
+}
+
+function NavItem({
+  item,
+  active,
+  onClick,
+  unreadNotifCount,
+  unreadMsgCount,
+}: {
+  item: typeof NAV_ITEMS[0];
+  active: boolean;
+  onClick: () => void;
+  unreadNotifCount: number;
+  unreadMsgCount: number;
+}) {
   return (
     <button
       onClick={onClick}
@@ -68,15 +92,15 @@ function NavItem({ item, active, onClick }: { item: typeof NAV_ITEMS[0]; active:
       )}
       <item.icon size={22} strokeWidth={active ? 2.5 : 1.5} />
       <span>{item.label}</span>
-      {item.tab === 'notifications' && (
-        <span className="ml-auto w-2 h-2 rounded-full bg-[#EF4444] animate-pulse" />
-      )}
+      {item.tab === 'notifications' && <UnreadBadge count={unreadNotifCount} />}
+      {item.tab === 'messages' && <UnreadBadge count={unreadMsgCount} />}
     </button>
   );
 }
 
 export default function DashboardSidebar({
   user, activeTab, onTabChange, onCreatePost, onLogout, mobileSidebar, onCloseMobile,
+  unreadNotifCount, unreadMsgCount,
 }: DashboardSidebarProps) {
   const handle = user.name?.toLowerCase().replace(/\s/g, '') ?? 'dev';
 
@@ -105,6 +129,8 @@ export default function DashboardSidebar({
             item={item}
             active={activeTab === item.tab}
             onClick={() => { onTabChange(item.tab); if (isMobile) onCloseMobile(); }}
+            unreadNotifCount={unreadNotifCount}
+            unreadMsgCount={unreadMsgCount}
           />
         ))}
       </nav>

@@ -59,6 +59,16 @@ export default function Dashboard() {
     { refetchInterval: 15000 },
   );
 
+  const { data: unreadNotifCount = 0 } = trpc.notifications.unreadCount.useQuery(
+    undefined,
+    { refetchInterval: 15000, enabled: !!user },
+  );
+
+  const { data: unreadMsgCount = 0 } = trpc.messages.totalUnread.useQuery(
+    undefined,
+    { refetchInterval: 15000, enabled: !!user },
+  );
+
   // Open messages tab when navigated from a profile "Mensaje" button
   useEffect(() => {
     if (handledState.current) return;
@@ -141,6 +151,8 @@ export default function Dashboard() {
         onLogout={logout}
         mobileSidebar={mobileSidebar}
         onCloseMobile={() => setMobileSidebar(false)}
+        unreadNotifCount={unreadNotifCount}
+        unreadMsgCount={unreadMsgCount}
       />
 
       <main className="flex-1 min-w-0 border-r border-[#1E2535]">

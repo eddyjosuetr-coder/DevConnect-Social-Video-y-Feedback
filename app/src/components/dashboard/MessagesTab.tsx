@@ -42,7 +42,10 @@ function ThreadView({
   );
 
   const markRead = trpc.messages.markRead.useMutation({
-    onSuccess: () => utils.messages.conversations.invalidate(),
+    onSuccess: () => {
+      void utils.messages.conversations.invalidate();
+      void utils.messages.totalUnread.invalidate();
+    },
   });
 
   const sendMsg = trpc.messages.send.useMutation({
