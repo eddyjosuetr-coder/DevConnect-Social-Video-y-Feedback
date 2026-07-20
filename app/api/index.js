@@ -33460,6 +33460,7 @@ var init_mysql_core = __esm({
 // db/schema.ts
 var schema_exports = {};
 __export(schema_exports, {
+  bookmarks: () => bookmarks,
   comments: () => comments,
   follows: () => follows,
   messages: () => messages,
@@ -33469,7 +33470,7 @@ __export(schema_exports, {
   reposts: () => reposts,
   users: () => users
 });
-var users, posts, postLikes, comments, reposts, messages, notifications, follows;
+var users, posts, postLikes, comments, reposts, messages, notifications, bookmarks, follows;
 var init_schema2 = __esm({
   "db/schema.ts"() {
     init_mysql_core();
@@ -33542,6 +33543,14 @@ var init_schema2 = __esm({
       readAt: timestamp("readAt"),
       createdAt: timestamp("createdAt").defaultNow().notNull()
     });
+    bookmarks = mysqlTable("bookmarks", {
+      id: serial("id").primaryKey(),
+      userId: bigint("userId", { mode: "number", unsigned: true }).notNull(),
+      postId: bigint("postId", { mode: "number", unsigned: true }).notNull(),
+      createdAt: timestamp("createdAt").defaultNow().notNull()
+    }, (table) => ({
+      userPostUnique: uniqueIndex("bookmarks_user_post_idx").on(table.userId, table.postId)
+    }));
     follows = mysqlTable("follows", {
       id: serial("id").primaryKey(),
       followerId: bigint("followerId", { mode: "number", unsigned: true }).notNull(),
@@ -33643,34 +33652,91 @@ var init_connection = __esm({
 });
 
 // server/queries/posts.ts
-async function listPosts() {
+async function listPosts(viewerUserId) {
   if (isMock) {
-    return [...mockPosts].sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime()).map(({ userId: _uid, ...row }) => row);
+    return [...mockPosts].sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime()).map(({ userId: _uid, ...row }) => ({
+      ...row,
+      isLikedByMe: viewerUserId ? mockLikes.has(`${viewerUserId}:${row.id}`) : false,
+      isRepostedByMe: false,
+      isRepostEntry: false
+    }));
   }
   const db = getDb();
-  return db.select({
-    id: posts.id,
-    content: posts.content,
-    code: posts.code,
-    codeLanguage: posts.codeLanguage,
-    tags: posts.tags,
-    mediaUrl: posts.mediaUrl,
-    mediaType: posts.mediaType,
-    likesCount: posts.likesCount,
-    commentsCount: posts.commentsCount,
-    repostsCount: posts.repostsCount,
-    createdAt: posts.createdAt,
-    authorId: posts.userId,
-    authorName: users.name,
-    authorAvatar: users.avatar
-  }).from(posts).leftJoin(users, eq(posts.userId, users.id)).orderBy(desc(posts.createdAt));
+  const safeViewerId = viewerUserId ?? 0;
+  const [originalPosts, repostEntries] = await Promise.all([
+    // Original posts with viewer's liked/reposted status
+    db.select({
+      id: posts.id,
+      content: posts.content,
+      code: posts.code,
+      codeLanguage: posts.codeLanguage,
+      tags: posts.tags,
+      mediaUrl: posts.mediaUrl,
+      mediaType: posts.mediaType,
+      likesCount: posts.likesCount,
+      commentsCount: posts.commentsCount,
+      repostsCount: posts.repostsCount,
+      createdAt: posts.createdAt,
+      authorId: posts.userId,
+      authorName: users.name,
+      authorAvatar: users.avatar,
+      isLikedByMe: sql`CASE WHEN ${postLikes.id} IS NOT NULL THEN 1 ELSE 0 END`,
+      isRepostedByMe: sql`CASE WHEN ${reposts.id} IS NOT NULL THEN 1 ELSE 0 END`
+    }).from(posts).leftJoin(users, eq(posts.userId, users.id)).leftJoin(postLikes, and(eq(postLikes.postId, posts.id), eq(postLikes.userId, safeViewerId))).leftJoin(reposts, and(eq(reposts.postId, posts.id), eq(reposts.userId, safeViewerId))),
+    // Repost feed entries (who shared what)
+    db.select({
+      id: posts.id,
+      content: posts.content,
+      code: posts.code,
+      codeLanguage: posts.codeLanguage,
+      tags: posts.tags,
+      mediaUrl: posts.mediaUrl,
+      mediaType: posts.mediaType,
+      likesCount: posts.likesCount,
+      commentsCount: posts.commentsCount,
+      repostsCount: posts.repostsCount,
+      createdAt: posts.createdAt,
+      authorId: posts.userId,
+      authorName: users.name,
+      authorAvatar: users.avatar,
+      repostId: reposts.id,
+      repostCreatedAt: reposts.createdAt,
+      quoteText: reposts.quoteText,
+      reposterId: reposts.userId,
+      reposterName: sql`(SELECT name FROM \`users\` WHERE id = ${reposts.userId})`,
+      reposterAvatar: sql`(SELECT avatar FROM \`users\` WHERE id = ${reposts.userId})`
+    }).from(reposts).innerJoin(posts, eq(reposts.postId, posts.id)).innerJoin(users, eq(posts.userId, users.id))
+  ]);
+  return [
+    ...originalPosts.map((r) => ({
+      ...r,
+      isLikedByMe: Boolean(r.isLikedByMe),
+      isRepostedByMe: Boolean(r.isRepostedByMe),
+      isRepostEntry: false
+    })),
+    ...repostEntries.map((r) => ({
+      ...r,
+      isLikedByMe: false,
+      isRepostedByMe: false,
+      isRepostEntry: true
+    }))
+  ].sort((a, b) => {
+    const dateA = a.isRepostEntry ? (a.repostCreatedAt ?? a.createdAt).getTime() : a.createdAt.getTime();
+    const dateB = b.isRepostEntry ? (b.repostCreatedAt ?? b.createdAt).getTime() : b.createdAt.getTime();
+    return dateB - dateA;
+  });
 }
-async function listPostsByUser(userId) {
+async function listPostsByUser(userId, viewerUserId) {
   if (isMock) {
-    return [...mockPosts].filter((p) => p.userId === userId).sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime()).map(({ userId: _uid, ...row }) => row);
+    return [...mockPosts].filter((p) => p.userId === userId).sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime()).map(({ userId: _uid, ...row }) => ({
+      ...row,
+      isLikedByMe: viewerUserId ? mockLikes.has(`${viewerUserId}:${row.id}`) : false,
+      isRepostedByMe: false
+    }));
   }
   const db = getDb();
-  return db.select({
+  const safeViewerId = viewerUserId ?? 0;
+  const rows = await db.select({
     id: posts.id,
     content: posts.content,
     code: posts.code,
@@ -33684,8 +33750,15 @@ async function listPostsByUser(userId) {
     createdAt: posts.createdAt,
     authorId: posts.userId,
     authorName: users.name,
-    authorAvatar: users.avatar
-  }).from(posts).leftJoin(users, eq(posts.userId, users.id)).where(eq(posts.userId, userId)).orderBy(desc(posts.createdAt));
+    authorAvatar: users.avatar,
+    isLikedByMe: sql`CASE WHEN ${postLikes.id} IS NOT NULL THEN 1 ELSE 0 END`,
+    isRepostedByMe: sql`CASE WHEN ${reposts.id} IS NOT NULL THEN 1 ELSE 0 END`
+  }).from(posts).leftJoin(users, eq(posts.userId, users.id)).leftJoin(postLikes, and(eq(postLikes.postId, posts.id), eq(postLikes.userId, safeViewerId))).leftJoin(reposts, and(eq(reposts.postId, posts.id), eq(reposts.userId, safeViewerId))).where(eq(posts.userId, userId)).orderBy(desc(posts.createdAt));
+  return rows.map((row) => ({
+    ...row,
+    isLikedByMe: Boolean(row.isLikedByMe),
+    isRepostedByMe: Boolean(row.isRepostedByMe)
+  }));
 }
 async function createPost(data) {
   if (isMock) {
@@ -33764,6 +33837,146 @@ async function deletePost(postId, userId) {
   const db = getDb();
   await db.delete(posts).where(and(eq(posts.id, postId), eq(posts.userId, userId)));
   return { success: true };
+}
+async function listFeed(viewerUserId) {
+  if (isMock) return listPosts(viewerUserId);
+  const db = getDb();
+  const followedRows = await db.select({ followingId: follows.followingId }).from(follows).where(eq(follows.followerId, viewerUserId));
+  const followedIds = followedRows.map((r) => r.followingId);
+  if (followedIds.length === 0) return listPosts(viewerUserId);
+  const feedUserIds = [...followedIds, viewerUserId];
+  const sv = viewerUserId;
+  const [originalPosts, repostEntries] = await Promise.all([
+    db.select({
+      id: posts.id,
+      content: posts.content,
+      code: posts.code,
+      codeLanguage: posts.codeLanguage,
+      tags: posts.tags,
+      mediaUrl: posts.mediaUrl,
+      mediaType: posts.mediaType,
+      likesCount: posts.likesCount,
+      commentsCount: posts.commentsCount,
+      repostsCount: posts.repostsCount,
+      createdAt: posts.createdAt,
+      authorId: posts.userId,
+      authorName: users.name,
+      authorAvatar: users.avatar,
+      isLikedByMe: sql`CASE WHEN ${postLikes.id} IS NOT NULL THEN 1 ELSE 0 END`,
+      isRepostedByMe: sql`CASE WHEN ${reposts.id} IS NOT NULL THEN 1 ELSE 0 END`
+    }).from(posts).leftJoin(users, eq(posts.userId, users.id)).leftJoin(postLikes, and(eq(postLikes.postId, posts.id), eq(postLikes.userId, sv))).leftJoin(reposts, and(eq(reposts.postId, posts.id), eq(reposts.userId, sv))).where(inArray(posts.userId, feedUserIds)),
+    db.select({
+      id: posts.id,
+      content: posts.content,
+      code: posts.code,
+      codeLanguage: posts.codeLanguage,
+      tags: posts.tags,
+      mediaUrl: posts.mediaUrl,
+      mediaType: posts.mediaType,
+      likesCount: posts.likesCount,
+      commentsCount: posts.commentsCount,
+      repostsCount: posts.repostsCount,
+      createdAt: posts.createdAt,
+      authorId: posts.userId,
+      authorName: users.name,
+      authorAvatar: users.avatar,
+      repostId: reposts.id,
+      repostCreatedAt: reposts.createdAt,
+      quoteText: reposts.quoteText,
+      reposterId: reposts.userId,
+      reposterName: sql`(SELECT name FROM \`users\` WHERE id = ${reposts.userId})`,
+      reposterAvatar: sql`(SELECT avatar FROM \`users\` WHERE id = ${reposts.userId})`
+    }).from(reposts).innerJoin(posts, eq(reposts.postId, posts.id)).innerJoin(users, eq(posts.userId, users.id)).where(inArray(reposts.userId, feedUserIds))
+  ]);
+  return [
+    ...originalPosts.map((r) => ({
+      ...r,
+      isLikedByMe: Boolean(r.isLikedByMe),
+      isRepostedByMe: Boolean(r.isRepostedByMe),
+      isRepostEntry: false
+    })),
+    ...repostEntries.map((r) => ({
+      ...r,
+      isLikedByMe: false,
+      isRepostedByMe: false,
+      isRepostEntry: true
+    }))
+  ].sort((a, b) => {
+    const dateA = a.isRepostEntry ? (a.repostCreatedAt ?? a.createdAt).getTime() : a.createdAt.getTime();
+    const dateB = b.isRepostEntry ? (b.repostCreatedAt ?? b.createdAt).getTime() : b.createdAt.getTime();
+    return dateB - dateA;
+  });
+}
+async function getPostById(postId, viewerUserId) {
+  if (isMock) {
+    const p = mockPosts.find((m) => m.id === postId);
+    if (!p) return null;
+    const { userId: _uid, ...row } = p;
+    return { ...row, isLikedByMe: false, isRepostedByMe: false, isRepostEntry: false };
+  }
+  const db = getDb();
+  const sv = viewerUserId ?? 0;
+  const rows = await db.select({
+    id: posts.id,
+    content: posts.content,
+    code: posts.code,
+    codeLanguage: posts.codeLanguage,
+    tags: posts.tags,
+    mediaUrl: posts.mediaUrl,
+    mediaType: posts.mediaType,
+    likesCount: posts.likesCount,
+    commentsCount: posts.commentsCount,
+    repostsCount: posts.repostsCount,
+    createdAt: posts.createdAt,
+    authorId: posts.userId,
+    authorName: users.name,
+    authorAvatar: users.avatar,
+    isLikedByMe: sql`CASE WHEN ${postLikes.id} IS NOT NULL THEN 1 ELSE 0 END`,
+    isRepostedByMe: sql`CASE WHEN ${reposts.id} IS NOT NULL THEN 1 ELSE 0 END`
+  }).from(posts).leftJoin(users, eq(posts.userId, users.id)).leftJoin(postLikes, and(eq(postLikes.postId, posts.id), eq(postLikes.userId, sv))).leftJoin(reposts, and(eq(reposts.postId, posts.id), eq(reposts.userId, sv))).where(eq(posts.id, postId)).limit(1);
+  if (!rows[0]) return null;
+  return {
+    ...rows[0],
+    isLikedByMe: Boolean(rows[0].isLikedByMe),
+    isRepostedByMe: Boolean(rows[0].isRepostedByMe),
+    isRepostEntry: false
+  };
+}
+async function listPostsByTag(tag2, viewerUserId) {
+  if (isMock) {
+    return [...mockPosts].filter((p) => p.tags?.split(",").map((t2) => t2.trim()).includes(tag2)).sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime()).map(({ userId: _uid, ...row }) => ({
+      ...row,
+      isLikedByMe: false,
+      isRepostedByMe: false,
+      isRepostEntry: false
+    }));
+  }
+  const db = getDb();
+  const sv = viewerUserId ?? 0;
+  const rows = await db.select({
+    id: posts.id,
+    content: posts.content,
+    code: posts.code,
+    codeLanguage: posts.codeLanguage,
+    tags: posts.tags,
+    mediaUrl: posts.mediaUrl,
+    mediaType: posts.mediaType,
+    likesCount: posts.likesCount,
+    commentsCount: posts.commentsCount,
+    repostsCount: posts.repostsCount,
+    createdAt: posts.createdAt,
+    authorId: posts.userId,
+    authorName: users.name,
+    authorAvatar: users.avatar,
+    isLikedByMe: sql`CASE WHEN ${postLikes.id} IS NOT NULL THEN 1 ELSE 0 END`,
+    isRepostedByMe: sql`CASE WHEN ${reposts.id} IS NOT NULL THEN 1 ELSE 0 END`
+  }).from(posts).leftJoin(users, eq(posts.userId, users.id)).leftJoin(postLikes, and(eq(postLikes.postId, posts.id), eq(postLikes.userId, sv))).leftJoin(reposts, and(eq(reposts.postId, posts.id), eq(reposts.userId, sv))).where(sql`FIND_IN_SET(${tag2}, ${posts.tags}) > 0`).orderBy(desc(posts.createdAt));
+  return rows.map((r) => ({
+    ...r,
+    isLikedByMe: Boolean(r.isLikedByMe),
+    isRepostedByMe: Boolean(r.isRepostedByMe),
+    isRepostEntry: false
+  }));
 }
 async function updatePost(postId, userId, data) {
   if (isMock) {
@@ -48177,7 +48390,7 @@ var init_zod = __esm({
 });
 
 // contracts/schemas.ts
-var createPostSchema, toggleLikeSchema, isLikedSchema, deletePostSchema, updatePostSchema, listCommentsSchema, createCommentSchema, deleteCommentSchema, toggleRepostSchema, quoteRepostSchema, listRepostsByUserSchema, sendMessageSchema, getThreadSchema, markReadSchema, searchUsersSchema, toggleFollowSchema, isFollowingSchema, getUserProfileSchema, listPostsByUserSchema, updateProfileSchema;
+var createPostSchema, toggleLikeSchema, isLikedSchema, deletePostSchema, updatePostSchema, listCommentsSchema, createCommentSchema, deleteCommentSchema, toggleRepostSchema, quoteRepostSchema, listRepostsByUserSchema, sendMessageSchema, getThreadSchema, markReadSchema, searchUsersSchema, toggleFollowSchema, isFollowingSchema, getUserProfileSchema, listPostsSchema, listPostsByUserSchema, updateProfileSchema, getPostSchema, listByTagSchema, toggleBookmarkSchema, listBookmarksSchema, getSuggestedUsersSchema, getTrendingTagsSchema;
 var init_schemas3 = __esm({
   "contracts/schemas.ts"() {
     init_zod();
@@ -48218,13 +48431,20 @@ var init_schemas3 = __esm({
     toggleFollowSchema = external_exports.object({ followingId: external_exports.number().int() });
     isFollowingSchema = external_exports.object({ followingId: external_exports.number().int() });
     getUserProfileSchema = external_exports.object({ userId: external_exports.number().int() });
-    listPostsByUserSchema = external_exports.object({ userId: external_exports.number().int() });
+    listPostsSchema = external_exports.object({ viewerUserId: external_exports.number().int().optional() }).optional();
+    listPostsByUserSchema = external_exports.object({ userId: external_exports.number().int(), viewerUserId: external_exports.number().int().optional() });
     updateProfileSchema = external_exports.object({
       name: external_exports.string().min(1).max(255).optional(),
       bio: external_exports.string().max(500).optional(),
       avatar: external_exports.string().max(6e5).optional(),
       banner: external_exports.string().max(2e6).optional()
     });
+    getPostSchema = external_exports.object({ postId: external_exports.number().int() });
+    listByTagSchema = external_exports.object({ tag: external_exports.string().max(100) });
+    toggleBookmarkSchema = external_exports.object({ postId: external_exports.number().int() });
+    listBookmarksSchema = external_exports.object({ viewerUserId: external_exports.number().int().optional() }).optional();
+    getSuggestedUsersSchema = external_exports.object({ limit: external_exports.number().int().max(50).optional() });
+    getTrendingTagsSchema = external_exports.object({ limit: external_exports.number().int().max(50).optional() });
   }
 });
 
@@ -48258,6 +48478,50 @@ async function searchUsers(query) {
   }
   const db = getDb();
   return db.select({ id: users.id, name: users.name, avatar: users.avatar }).from(users).where(like(users.name, `%${query}%`)).limit(10);
+}
+async function getTrendingTags(limit = 10) {
+  if (isMock2) {
+    return [
+      { tag: "typescript", count: 42 },
+      { tag: "react", count: 38 },
+      { tag: "nextjs", count: 29 },
+      { tag: "nodejs", count: 25 },
+      { tag: "css", count: 20 }
+    ].slice(0, limit);
+  }
+  const db = getDb();
+  const rows = await db.execute(sql`
+    SELECT tag, COUNT(*) AS count
+    FROM (
+      SELECT TRIM(SUBSTRING_INDEX(SUBSTRING_INDEX(tags, ',', n.n), ',', -1)) AS tag
+      FROM \`posts\`
+      CROSS JOIN (
+        SELECT 1 AS n UNION ALL SELECT 2 UNION ALL SELECT 3
+        UNION ALL SELECT 4 UNION ALL SELECT 5
+      ) n
+      WHERE n.n <= 1 + (LENGTH(tags) - LENGTH(REPLACE(tags, ',', '')))
+        AND tags IS NOT NULL AND tags != ''
+    ) t
+    WHERE tag != ''
+    GROUP BY tag
+    ORDER BY count DESC
+    LIMIT ${limit}
+  `);
+  return rows.map((r) => ({
+    tag: r.tag,
+    count: Number(r.count)
+  }));
+}
+async function getSuggestedUsers(limit = 5, excludeUserId) {
+  if (isMock2) {
+    return [...mockUserById.values()].filter((u) => u.id !== excludeUserId).slice(0, limit).map((u) => ({ id: u.id, name: u.name, avatar: u.avatar, bio: u.bio }));
+  }
+  const db = getDb();
+  const query = db.select({ id: users.id, name: users.name, avatar: users.avatar, bio: users.bio }).from(users).orderBy(desc(users.createdAt)).limit(limit);
+  if (excludeUserId) {
+    return query.where(notInArray(users.id, [excludeUserId]));
+  }
+  return query;
 }
 async function upsertUser(data) {
   if (isMock2) {
@@ -48404,9 +48668,9 @@ var init_posts_router = __esm({
     init_schemas3();
     init_notifications();
     postsRouter = createRouter({
-      list: publicQuery.query(() => listPosts()),
+      list: publicQuery.input(listPostsSchema).query(({ input }) => listPosts(input?.viewerUserId)),
       listByUser: publicQuery.input(listPostsByUserSchema).query(
-        ({ input }) => listPostsByUser(input.userId)
+        ({ input }) => listPostsByUser(input.userId, input.viewerUserId)
       ),
       create: authedQuery.input(createPostSchema).mutation(
         ({ ctx, input }) => createPost({
@@ -48441,6 +48705,13 @@ var init_posts_router = __esm({
           codeLanguage: input.codeLanguage,
           tags: input.tags
         })
+      ),
+      feed: authedQuery.query(({ ctx }) => listFeed(ctx.user.id)),
+      get: publicQuery.input(getPostSchema).query(
+        ({ ctx, input }) => getPostById(input.postId, ctx?.user?.id)
+      ),
+      listByTag: publicQuery.input(listByTagSchema).query(
+        ({ ctx, input }) => listPostsByTag(input.tag, ctx?.user?.id)
       )
     });
   }
@@ -48882,7 +49153,13 @@ var init_users_router = __esm({
           ...input.banner !== void 0 ? { banner: input.banner } : {}
         });
         return { success: true };
-      })
+      }),
+      trendingTags: publicQuery.input(getTrendingTagsSchema).query(
+        ({ input }) => getTrendingTags(input?.limit ?? 10)
+      ),
+      suggestedUsers: authedQuery.input(getSuggestedUsersSchema).query(
+        ({ ctx, input }) => getSuggestedUsers(input?.limit ?? 5, ctx.user.id)
+      )
     });
   }
 });
@@ -49033,6 +49310,100 @@ var init_notifications_router = __esm({
   }
 });
 
+// server/queries/bookmarks.ts
+async function toggleBookmark(userId, postId) {
+  if (isMock8) {
+    const key = String(userId);
+    const ids = mockBookmarks.get(key) ?? [];
+    const idx = ids.indexOf(postId);
+    if (idx >= 0) {
+      ids.splice(idx, 1);
+      mockBookmarks.set(key, ids);
+      return { bookmarked: false };
+    }
+    mockBookmarks.set(key, [...ids, postId]);
+    return { bookmarked: true };
+  }
+  const db = getDb();
+  const existing = await db.select({ id: bookmarks.id }).from(bookmarks).where(and(eq(bookmarks.userId, userId), eq(bookmarks.postId, postId))).limit(1);
+  if (existing.length > 0) {
+    await db.delete(bookmarks).where(and(eq(bookmarks.userId, userId), eq(bookmarks.postId, postId)));
+    return { bookmarked: false };
+  }
+  await db.insert(bookmarks).values({ userId, postId });
+  return { bookmarked: true };
+}
+async function isBookmarked(userId, postId) {
+  if (isMock8) {
+    return (mockBookmarks.get(String(userId)) ?? []).includes(postId);
+  }
+  const db = getDb();
+  const row = await db.select({ id: bookmarks.id }).from(bookmarks).where(and(eq(bookmarks.userId, userId), eq(bookmarks.postId, postId))).limit(1);
+  return row.length > 0;
+}
+async function listBookmarks(userId) {
+  if (isMock8) return [];
+  const db = getDb();
+  const rows = await db.select({
+    id: posts.id,
+    content: posts.content,
+    code: posts.code,
+    codeLanguage: posts.codeLanguage,
+    tags: posts.tags,
+    mediaUrl: posts.mediaUrl,
+    mediaType: posts.mediaType,
+    likesCount: posts.likesCount,
+    commentsCount: posts.commentsCount,
+    repostsCount: posts.repostsCount,
+    createdAt: posts.createdAt,
+    authorId: posts.userId,
+    authorName: users.name,
+    authorAvatar: users.avatar
+  }).from(bookmarks).innerJoin(posts, eq(bookmarks.postId, posts.id)).innerJoin(users, eq(posts.userId, users.id)).where(eq(bookmarks.userId, userId)).orderBy(desc(bookmarks.createdAt));
+  return rows.map((r) => ({
+    ...r,
+    isLikedByMe: false,
+    isRepostedByMe: false,
+    isRepostEntry: false
+  }));
+}
+async function getBookmarkedPostIds(userId) {
+  if (isMock8) return mockBookmarks.get(String(userId)) ?? [];
+  const db = getDb();
+  const rows = await db.select({ postId: bookmarks.postId }).from(bookmarks).where(eq(bookmarks.userId, userId));
+  return rows.map((r) => r.postId);
+}
+var isMock8, mockBookmarks;
+var init_bookmarks = __esm({
+  "server/queries/bookmarks.ts"() {
+    init_drizzle_orm();
+    init_connection();
+    init_schema2();
+    isMock8 = !process.env.DATABASE_URL;
+    mockBookmarks = /* @__PURE__ */ new Map();
+  }
+});
+
+// server/bookmarks-router.ts
+var bookmarksRouter;
+var init_bookmarks_router = __esm({
+  "server/bookmarks-router.ts"() {
+    init_middleware();
+    init_bookmarks();
+    init_schemas3();
+    bookmarksRouter = createRouter({
+      toggle: authedQuery.input(toggleBookmarkSchema).mutation(
+        ({ ctx, input }) => toggleBookmark(ctx.user.id, input.postId)
+      ),
+      isBookmarked: authedQuery.input(toggleBookmarkSchema).query(
+        ({ ctx, input }) => isBookmarked(ctx.user.id, input.postId).then((b) => ({ bookmarked: b }))
+      ),
+      list: authedQuery.query(({ ctx }) => listBookmarks(ctx.user.id)),
+      bookmarkedIds: authedQuery.query(({ ctx }) => getBookmarkedPostIds(ctx.user.id))
+    });
+  }
+});
+
 // server/router.ts
 var appRouter;
 var init_router5 = __esm({
@@ -49045,6 +49416,7 @@ var init_router5 = __esm({
     init_users_router();
     init_messages_router();
     init_notifications_router();
+    init_bookmarks_router();
     init_middleware();
     appRouter = createRouter({
       ping: publicQuery.query(() => ({ ok: true, ts: Date.now() })),
@@ -49055,7 +49427,8 @@ var init_router5 = __esm({
       follows: followsRouter,
       users: usersRouter,
       messages: messagesRouter,
-      notifications: notificationsRouter
+      notifications: notificationsRouter,
+      bookmarks: bookmarksRouter
     });
   }
 });

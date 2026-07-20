@@ -26,8 +26,9 @@ export default function ExploreTab({ addToast }: ExploreTabProps) {
   );
 
   const toggleFollow = trpc.follows.toggle.useMutation({
-    onSuccess: (res, vars) => {
+    onSuccess: (res) => {
       void utils.users.suggestedUsers.invalidate();
+      void utils.follows.listFollowing.invalidate();
       const followed = (res as { following?: boolean }).following;
       addToast(
         followed ? 'Siguiendo!' : 'Dejaste de seguir',

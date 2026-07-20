@@ -1,7 +1,6 @@
 import { useParams, useNavigate } from 'react-router';
 import { ArrowLeft, Code2 } from 'lucide-react';
 import { trpc } from '@/providers/trpc';
-import { useAuth } from '@/hooks/useAuth';
 import { useToast } from '@/hooks/useToast';
 import ToastContainer from '@/components/ToastContainer';
 import PostCard from '@/components/dashboard/PostCard';
@@ -10,7 +9,6 @@ import CommentSection from '@/components/dashboard/CommentSection';
 export default function PostDetailPage() {
   const { postId } = useParams<{ postId: string }>();
   const navigate = useNavigate();
-  const { user } = useAuth();
   const { toasts, addToast, removeToast } = useToast();
 
   const id = Number(postId);
