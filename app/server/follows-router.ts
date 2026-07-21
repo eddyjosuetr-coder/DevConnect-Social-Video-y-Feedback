@@ -1,6 +1,6 @@
-import { createRouter, authedQuery } from "./middleware";
-import { toggleFollow, isFollowing, listFollowing } from "./queries/follows";
-import { toggleFollowSchema, isFollowingSchema } from "@contracts/schemas";
+import { createRouter, publicQuery, authedQuery } from "./middleware";
+import { toggleFollow, isFollowing, listFollowing, listFollowers, listFollowingUsers } from "./queries/follows";
+import { toggleFollowSchema, isFollowingSchema, listFollowersSchema } from "@contracts/schemas";
 import { createNotification } from "./queries/notifications";
 
 export const followsRouter = createRouter({
@@ -18,5 +18,13 @@ export const followsRouter = createRouter({
 
   listFollowing: authedQuery.query(({ ctx }) =>
     listFollowing(ctx.user.id)
+  ),
+
+  listFollowers: publicQuery.input(listFollowersSchema).query(({ input }) =>
+    listFollowers(input.userId)
+  ),
+
+  listFollowingUsers: publicQuery.input(listFollowersSchema).query(({ input }) =>
+    listFollowingUsers(input.userId)
   ),
 });

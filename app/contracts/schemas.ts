@@ -67,3 +67,6 @@ export const listBookmarksSchema = z.object({ viewerUserId: z.number().int().opt
 
 export const getSuggestedUsersSchema = z.object({ limit: z.number().int().max(50).optional() });
 export const getTrendingTagsSchema = z.object({ limit: z.number().int().max(50).optional() });
+
+export const listFollowersSchema = z.object({ userId: z.number().int() });
+export const toggleCommentLikeSchema = z.object({ commentId: z.number().int() });

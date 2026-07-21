@@ -94,7 +94,7 @@ export default function NotificationsTab() {
             key={n.id}
             onClick={() => {
               if (n.type === 'follow') navigate(`/u/${n.actorId}`);
-              else if (n.postId) navigate(`/u/${n.actorId}`);
+              else if (n.postId) navigate(`/post/${n.postId}`);
             }}
             className={`w-full flex items-start gap-4 px-4 py-4 border-b border-[#2A3347] hover:bg-[#151A27]/50 transition-colors text-left ${
               isUnread ? 'bg-[#e1ff00]/[0.02]' : ''

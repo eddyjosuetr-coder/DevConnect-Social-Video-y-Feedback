@@ -1,11 +1,11 @@
 import { createRouter, publicQuery, authedQuery } from "./middleware";
-import { listComments, createComment, deleteComment } from "./queries/comments";
-import { listCommentsSchema, createCommentSchema, deleteCommentSchema } from "@contracts/schemas";
+import { listComments, createComment, deleteComment, toggleCommentLike } from "./queries/comments";
+import { listCommentsSchema, createCommentSchema, deleteCommentSchema, toggleCommentLikeSchema } from "@contracts/schemas";
 import { createNotification } from "./queries/notifications";
 
 export const commentsRouter = createRouter({
-  list: publicQuery.input(listCommentsSchema).query(({ input }) =>
-    listComments(input.postId)
+  list: publicQuery.input(listCommentsSchema).query(({ ctx, input }) =>
+    listComments(input.postId, ctx.user?.id)
   ),
 
   create: authedQuery.input(createCommentSchema).mutation(async ({ ctx, input }) => {
@@ -24,5 +24,9 @@ export const commentsRouter = createRouter({
 
   delete: authedQuery.input(deleteCommentSchema).mutation(({ ctx, input }) =>
     deleteComment(input.commentId, ctx.user.id)
+  ),
+
+  toggleLike: authedQuery.input(toggleCommentLikeSchema).mutation(({ ctx, input }) =>
+    toggleCommentLike(ctx.user.id, input.commentId)
   ),
 });

@@ -270,7 +270,6 @@ export default function Dashboard() {
           {activeTab === 'profile' && (
             <ProfileTab
               user={user}
-              postsList={feedPosts.filter((p) => !p.isRepostEntry)}
               savedPostIds={bookmarkedSet}
               onToggleSave={(postId) => toggleBookmark.mutate({ postId })}
               addToast={addToast}

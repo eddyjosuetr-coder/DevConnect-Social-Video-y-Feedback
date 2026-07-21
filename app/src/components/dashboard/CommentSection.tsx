@@ -1,8 +1,9 @@
 import { useState, useEffect, useRef } from 'react';
-import { Code2, Smile, Search, X, Loader2 } from 'lucide-react';
+import { Code2, Smile, Search, X, Loader2, Heart } from 'lucide-react';
 import Picker from '@emoji-mart/react';
 import data from '@emoji-mart/data';
 import { trpc } from '@/providers/trpc';
+import { useAuth } from '@/hooks/useAuth';
 import { formatDate } from '@/lib/utils';
 import { fetchTrending, searchGifs, type GifItem } from '@/lib/giphy';
 import type { Toast } from '@/hooks/useToast';
@@ -232,6 +233,8 @@ type CommentRow = {
   authorId: number;
   authorName: string | null;
   authorAvatar: string | null;
+  likesCount: number;
+  isLikedByMe: boolean;
 };
 
 interface CommentSectionProps {
@@ -241,6 +244,8 @@ interface CommentSectionProps {
 }
 
 export default function CommentSection({ postId, isOpen, addToast }: CommentSectionProps) {
+  const { user } = useAuth();
+  const utils = trpc.useUtils();
   const [text,      setText]      = useState('');
   const [code,      setCode]      = useState('');
   const [lang,      setLang]      = useState('typescript');
@@ -273,6 +278,19 @@ export default function CommentSection({ postId, isOpen, addToast }: CommentSect
     },
   });
 
+  const likeComment = trpc.comments.toggleLike.useMutation({
+    onSuccess: (res, vars) => {
+      setLocalComments((prev) =>
+        prev.map((c) =>
+          c.id === vars.commentId
+            ? { ...c, likesCount: res.liked ? c.likesCount + 1 : Math.max(0, c.likesCount - 1), isLikedByMe: res.liked }
+            : c,
+        ),
+      );
+      void utils.comments.list.invalidate({ postId });
+    },
+  });
+
   function insertEmoji(native: string) {
     const pos = cursorRef.current;
     const next = text.slice(0, pos) + native + text.slice(pos);
@@ -302,6 +320,8 @@ export default function CommentSection({ postId, isOpen, addToast }: CommentSect
       authorId: 0,
       authorName: 'Tú',
       authorAvatar: null,
+      likesCount: 0,
+      isLikedByMe: false,
     };
     setLocalComments((prev) => [optimistic, ...prev]);
     setText('');
@@ -334,9 +354,22 @@ export default function CommentSection({ postId, isOpen, addToast }: CommentSect
             </div>
           )}
           <div className="bg-[#0F131D] px-3 py-2.5 flex-1 rounded-xl min-w-0">
-            <div className="flex items-center gap-1.5 mb-1.5">
-              <span className="text-xs text-[#e1ff00] font-semibold">{c.authorName ?? 'Developer'}</span>
-              <span className="text-[#5A6680] text-xs">· {formatDate(c.createdAt)}</span>
+            <div className="flex items-center justify-between mb-1.5">
+              <div className="flex items-center gap-1.5">
+                <span className="text-xs text-[#e1ff00] font-semibold">{c.authorName ?? 'Developer'}</span>
+                <span className="text-[#5A6680] text-xs">· {formatDate(c.createdAt)}</span>
+              </div>
+              {user && (
+                <button
+                  onClick={() => likeComment.mutate({ commentId: c.id })}
+                  disabled={likeComment.isPending}
+                  className="flex items-center gap-1 text-xs transition-colors disabled:opacity-50 shrink-0 ml-2"
+                  style={{ color: c.isLikedByMe ? '#EF4444' : '#5A6680' }}
+                >
+                  <Heart size={11} fill={c.isLikedByMe ? '#EF4444' : 'none'} />
+                  {c.likesCount > 0 && <span className="tabular-nums">{c.likesCount}</span>}
+                </button>
+              )}
             </div>
             <CommentBody content={c.content} />
           </div>

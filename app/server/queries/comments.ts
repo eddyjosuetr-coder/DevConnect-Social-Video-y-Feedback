@@ -1,6 +1,6 @@
-import { eq, desc, sql } from "drizzle-orm";
+import { eq, desc, sql, and, inArray, count } from "drizzle-orm";
 import { getDb } from "./connection";
-import { comments, posts, users } from "@db/schema";
+import { comments, posts, users, commentLikes } from "@db/schema";
 import { mockPosts } from "./posts";
 
 export type CommentRow = {
@@ -10,12 +10,14 @@ export type CommentRow = {
   authorId: number;
   authorName: string | null;
   authorAvatar: string | null;
+  likesCount: number;
+  isLikedByMe: boolean;
 };
 
 // ── Mock store ────────────────────────────────────────────────────────────────
 let nextCommentId = 20;
 
-type StoredComment = CommentRow & { postId: number; userId: number };
+type StoredComment = Omit<CommentRow, 'likesCount' | 'isLikedByMe'> & { postId: number; userId: number };
 
 export const mockComments: StoredComment[] = [
   {
@@ -42,15 +44,16 @@ const isMock = !process.env.DATABASE_URL;
 
 // ── Query functions ──────────────────────────────────────────────────────────
 
-export async function listComments(postId: number): Promise<CommentRow[]> {
+export async function listComments(postId: number, viewerUserId?: number): Promise<CommentRow[]> {
   if (isMock) {
     return mockComments
       .filter((c) => c.postId === postId)
       .sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime())
-      .map(({ postId: _pid, userId: _uid, ...row }) => row);
+      .map(({ postId: _pid, userId: _uid, ...row }) => ({ ...row, likesCount: 0, isLikedByMe: false }));
   }
   const db = getDb();
-  return db
+
+  const rows = await db
     .select({
       id: comments.id,
       content: comments.content,
@@ -63,6 +66,49 @@ export async function listComments(postId: number): Promise<CommentRow[]> {
     .leftJoin(users, eq(comments.userId, users.id))
     .where(eq(comments.postId, postId))
     .orderBy(desc(comments.createdAt));
+
+  if (rows.length === 0) return [];
+
+  const commentIds = rows.map((r) => r.id);
+
+  const likeCounts = await db
+    .select({ commentId: commentLikes.commentId, total: count() })
+    .from(commentLikes)
+    .where(inArray(commentLikes.commentId, commentIds))
+    .groupBy(commentLikes.commentId);
+
+  const likeCountMap = new Map(likeCounts.map((l) => [l.commentId, l.total]));
+
+  let likedByMeSet = new Set<number>();
+  if (viewerUserId) {
+    const myLikes = await db
+      .select({ commentId: commentLikes.commentId })
+      .from(commentLikes)
+      .where(and(eq(commentLikes.userId, viewerUserId), inArray(commentLikes.commentId, commentIds)));
+    likedByMeSet = new Set(myLikes.map((l) => l.commentId));
+  }
+
+  return rows.map((r) => ({
+    ...r,
+    likesCount: likeCountMap.get(r.id) ?? 0,
+    isLikedByMe: likedByMeSet.has(r.id),
+  }));
+}
+
+export async function toggleCommentLike(userId: number, commentId: number): Promise<{ liked: boolean }> {
+  if (isMock) return { liked: false };
+  const db = getDb();
+  const existing = await db
+    .select()
+    .from(commentLikes)
+    .where(and(eq(commentLikes.userId, userId), eq(commentLikes.commentId, commentId)))
+    .limit(1);
+  if (existing.length > 0) {
+    await db.delete(commentLikes).where(eq(commentLikes.id, existing[0].id));
+    return { liked: false };
+  }
+  await db.insert(commentLikes).values({ userId, commentId });
+  return { liked: true };
 }
 
 export async function createComment(data: {

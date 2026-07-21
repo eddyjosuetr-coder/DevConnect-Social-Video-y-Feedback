@@ -1,31 +1,36 @@
 import { useState } from 'react';
-import { Calendar, Code2, Heart, MessageCircle, Verified, Repeat2 } from 'lucide-react';
+import { Calendar, Code2, Heart, MessageCircle, Verified, Repeat2, Users } from 'lucide-react';
 import PostCard from './PostCard';
 import SharedPostCard from './SharedPostCard';
 import EditProfileModal from './EditProfileModal';
+import FollowersModal from './FollowersModal';
 import { trpc } from '@/providers/trpc';
-import type { Post } from './types';
 import type { User } from '@db/schema';
 import type { Toast } from '@/hooks/useToast';
 
 interface ProfileTabProps {
   user: User;
-  postsList: Post[];
   savedPostIds: Set<number>;
   onToggleSave: (postId: number) => void;
   addToast: (message: string, type: Toast['type']) => void;
 }
 
-export default function ProfileTab({ user, postsList, savedPostIds, onToggleSave, addToast }: ProfileTabProps) {
+export default function ProfileTab({ user, savedPostIds, onToggleSave, addToast }: ProfileTabProps) {
   const [editOpen, setEditOpen] = useState(false);
+  const [followersModal, setFollowersModal] = useState<'followers' | 'following' | null>(null);
   const [profileTab, setProfileTab] = useState<'posts' | 'compartidos'>('posts');
+
+  const { data: profile } = trpc.users.getProfile.useQuery({ userId: user.id });
+
+  const { data: myPosts = [], isLoading: postsLoading } = trpc.posts.listByUser.useQuery(
+    { userId: user.id },
+  );
 
   const { data: myReposts, isLoading: repostsLoading } = trpc.reposts.listByUser.useQuery(
     { userId: user.id },
-    { enabled: profileTab === 'compartidos' }
+    { enabled: profileTab === 'compartidos' },
   );
 
-  const myPosts = postsList.filter((p) => p.authorId === user.id);
   const totalLikesReceived = myPosts.reduce((sum, p) => sum + (p.likesCount ?? 0), 0);
   const totalComments = myPosts.reduce((sum, p) => sum + (p.commentsCount ?? 0), 0);
   const handle = user.name?.toLowerCase().replace(/\s+/g, '') ?? 'dev';
@@ -98,11 +103,34 @@ export default function ProfileTab({ user, postsList, savedPostIds, onToggleSave
         </div>
 
         {/* Stats */}
-        <div className="flex gap-5 pb-3 border-b border-[#2A3347]">
+        <div className="flex gap-5 pb-3 border-b border-[#2A3347] flex-wrap">
           <div className="text-center">
-            <p className="text-[#f3f2f2] font-bold">{myPosts.length}</p>
+            <p className="text-[#f3f2f2] font-bold">{postsLoading ? '—' : myPosts.length}</p>
             <p className="text-[#5A6680] text-xs">Posts</p>
           </div>
+
+          <button
+            onClick={() => setFollowersModal('followers')}
+            className="text-center hover:opacity-80 transition-opacity"
+          >
+            <p className="text-[#f3f2f2] font-bold flex items-center gap-1">
+              <Users size={13} className="text-[#22C55E]" />
+              {profile?.followerCount ?? '—'}
+            </p>
+            <p className="text-[#5A6680] text-xs">Seguidores</p>
+          </button>
+
+          <button
+            onClick={() => setFollowersModal('following')}
+            className="text-center hover:opacity-80 transition-opacity"
+          >
+            <p className="text-[#f3f2f2] font-bold flex items-center gap-1">
+              <Users size={13} className="text-[#3B82F6]" />
+              {profile?.followingCount ?? '—'}
+            </p>
+            <p className="text-[#5A6680] text-xs">Siguiendo</p>
+          </button>
+
           <div className="text-center flex items-center gap-1.5">
             <div>
               <p className="text-[#f3f2f2] font-bold flex items-center gap-1">
@@ -151,7 +179,11 @@ export default function ProfileTab({ user, postsList, savedPostIds, onToggleSave
       </div>
 
       {/* Posts */}
-      {profileTab === 'posts' && (myPosts.length === 0 ? (
+      {profileTab === 'posts' && (postsLoading ? (
+        <div className="flex justify-center py-14">
+          <div className="w-6 h-6 rounded-full border-2 border-t-[#e1ff00] border-[#1E2535] animate-spin" />
+        </div>
+      ) : myPosts.length === 0 ? (
         <div className="text-center py-16 px-4">
           <Code2 size={40} className="text-[#2A3347] mx-auto mb-4" />
           <p className="text-[#5A6680] text-sm">Aún no tienes posts. ¡Comparte algo!</p>
@@ -196,6 +228,14 @@ export default function ProfileTab({ user, postsList, savedPostIds, onToggleSave
           user={user}
           onClose={() => setEditOpen(false)}
           addToast={addToast}
+        />
+      )}
+
+      {followersModal && (
+        <FollowersModal
+          userId={user.id}
+          type={followersModal}
+          onClose={() => setFollowersModal(null)}
         />
       )}
     </div>

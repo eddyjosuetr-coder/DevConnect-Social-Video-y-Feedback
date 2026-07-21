@@ -1,6 +1,6 @@
 import { eq, and, count } from "drizzle-orm";
 import { getDb } from "./connection";
-import { follows } from "@db/schema";
+import { follows, users } from "@db/schema";
 
 const isMock = !process.env.DATABASE_URL;
 
@@ -81,6 +81,26 @@ export async function getFollowerCount(userId: number): Promise<number> {
     .from(follows)
     .where(eq(follows.followingId, userId));
   return row?.total ?? 0;
+}
+
+export async function listFollowers(userId: number): Promise<Array<{ id: number; name: string | null; avatar: string | null; bio: string | null }>> {
+  if (isMock) return [];
+  const db = getDb();
+  return db
+    .select({ id: users.id, name: users.name, avatar: users.avatar, bio: users.bio })
+    .from(follows)
+    .innerJoin(users, eq(users.id, follows.followerId))
+    .where(eq(follows.followingId, userId));
+}
+
+export async function listFollowingUsers(userId: number): Promise<Array<{ id: number; name: string | null; avatar: string | null; bio: string | null }>> {
+  if (isMock) return [];
+  const db = getDb();
+  return db
+    .select({ id: users.id, name: users.name, avatar: users.avatar, bio: users.bio })
+    .from(follows)
+    .innerJoin(users, eq(users.id, follows.followingId))
+    .where(eq(follows.followerId, userId));
 }
 
 export async function getFollowingCount(userId: number): Promise<number> {

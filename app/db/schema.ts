@@ -107,6 +107,16 @@ export const bookmarks = mysqlTable("bookmarks", {
   userPostUnique: uniqueIndex("bookmarks_user_post_idx").on(table.userId, table.postId),
 }));
 
+// ── Comment Likes ──
+export const commentLikes = mysqlTable("comment_likes", {
+  id: serial("id").primaryKey(),
+  commentId: bigint("commentId", { mode: "number", unsigned: true }).notNull(),
+  userId: bigint("userId", { mode: "number", unsigned: true }).notNull(),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+}, (table) => ({
+  userCommentUnique: uniqueIndex("comment_likes_user_comment_idx").on(table.commentId, table.userId),
+}));
+
 // ── Follows ──
 export const follows = mysqlTable("follows", {
   id: serial("id").primaryKey(),

@@ -85,6 +85,13 @@ export function getDb() {
         createdAt TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
         UNIQUE KEY bookmarks_user_post_idx (userId, postId)
       )`);
+      await run(`CREATE TABLE IF NOT EXISTS comment_likes (
+        id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+        commentId BIGINT UNSIGNED NOT NULL,
+        userId BIGINT UNSIGNED NOT NULL,
+        createdAt TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        UNIQUE KEY comment_likes_user_comment_idx (commentId, userId)
+      )`);
     })();
   }
   return instance;

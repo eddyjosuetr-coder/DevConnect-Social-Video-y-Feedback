@@ -8,6 +8,7 @@ import PostCard from '@/components/dashboard/PostCard';
 import SharedPostCard from '@/components/dashboard/SharedPostCard';
 import ToastContainer from '@/components/ToastContainer';
 import DashboardSidebar from '@/components/dashboard/DashboardSidebar';
+import FollowersModal from '@/components/dashboard/FollowersModal';
 import type { User as AuthUser } from '@db/schema';
 
 // ── Color palette per user id ─────────────────────────────────────────────────
@@ -155,7 +156,15 @@ function FollowButton({
 }
 
 // ── StatItem ──────────────────────────────────────────────────────────────────
-function StatItem({ value, label }: { value: number; label: string }) {
+function StatItem({ value, label, onClick }: { value: number; label: string; onClick?: () => void }) {
+  if (onClick) {
+    return (
+      <button onClick={onClick} className="flex items-baseline gap-1.5 hover:opacity-70 transition-opacity">
+        <span className="text-[#f3f2f2] font-bold text-base tabular-nums">{value.toLocaleString()}</span>
+        <span className="text-[#5A6680] text-xs font-mono">{label}</span>
+      </button>
+    );
+  }
   return (
     <div className="flex items-baseline gap-1.5">
       <span className="text-[#f3f2f2] font-bold text-base tabular-nums">{value.toLocaleString()}</span>
@@ -175,6 +184,7 @@ export default function UserProfile() {
   const isOwnProfile = isAuthenticated && me?.id === userId;
   const [mobileSidebar, setMobileSidebar] = useState(false);
   const [profileTab, setProfileTab] = useState<'posts' | 'compartidos'>('posts');
+  const [followersModal, setFollowersModal] = useState<'followers' | 'following' | null>(null);
   const [c1, c2] = palette(userId);
 
   const { data: profile, isLoading: profileLoading } = trpc.users.getProfile.useQuery(
@@ -393,9 +403,9 @@ export default function UserProfile() {
 
             {/* Stats row */}
             <div className="mt-4 flex items-center gap-5">
-              <StatItem value={profile.followingCount} label="Siguiendo" />
+              <StatItem value={profile.followingCount} label="Siguiendo" onClick={() => setFollowersModal('following')} />
               <span className="text-[#1E2535]">·</span>
-              <StatItem value={followerCount} label="Seguidores" />
+              <StatItem value={followerCount} label="Seguidores" onClick={() => setFollowersModal('followers')} />
             </div>
           </div>
         </div>
@@ -477,6 +487,14 @@ export default function UserProfile() {
         )}
         </div>
       </main>
+
+      {followersModal && (
+        <FollowersModal
+          userId={userId}
+          type={followersModal}
+          onClose={() => setFollowersModal(null)}
+        />
+      )}
     </div>
   );
 }
