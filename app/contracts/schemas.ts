@@ -28,6 +28,7 @@ export const listCommentsSchema = z.object({ postId: z.number().int() });
 export const createCommentSchema = z.object({
   postId: z.number().int(),
   content: z.string().min(1).max(1000),
+  parentId: z.number().int().optional(),
 });
 
 export const deleteCommentSchema = z.object({ commentId: z.number().int() });
@@ -70,4 +71,5 @@ export const getTrendingTagsSchema = z.object({ limit: z.number().int().max(50).
 
 export const listFollowersSchema = z.object({ userId: z.number().int() });
 export const toggleCommentLikeSchema = z.object({ commentId: z.number().int() });
+export const listRepliesSchema = z.object({ commentId: z.number().int() });
 export const searchPostsSchema = z.object({ query: z.string().max(100) });

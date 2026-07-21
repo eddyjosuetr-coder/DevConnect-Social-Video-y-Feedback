@@ -33461,6 +33461,7 @@ var init_mysql_core = __esm({
 var schema_exports = {};
 __export(schema_exports, {
   bookmarks: () => bookmarks,
+  commentLikes: () => commentLikes,
   comments: () => comments,
   follows: () => follows,
   messages: () => messages,
@@ -33470,7 +33471,7 @@ __export(schema_exports, {
   reposts: () => reposts,
   users: () => users
 });
-var users, posts, postLikes, comments, reposts, messages, notifications, bookmarks, follows;
+var users, posts, postLikes, comments, reposts, messages, notifications, bookmarks, commentLikes, follows;
 var init_schema2 = __esm({
   "db/schema.ts"() {
     init_mysql_core();
@@ -33515,6 +33516,7 @@ var init_schema2 = __esm({
       postId: bigint("postId", { mode: "number", unsigned: true }).notNull(),
       userId: bigint("userId", { mode: "number", unsigned: true }).notNull(),
       content: text("content").notNull(),
+      parentId: bigint("parentId", { mode: "number", unsigned: true }),
       createdAt: timestamp("createdAt").defaultNow().notNull()
     });
     reposts = mysqlTable("reposts", {
@@ -33550,6 +33552,14 @@ var init_schema2 = __esm({
       createdAt: timestamp("createdAt").defaultNow().notNull()
     }, (table) => ({
       userPostUnique: uniqueIndex("bookmarks_user_post_idx").on(table.userId, table.postId)
+    }));
+    commentLikes = mysqlTable("comment_likes", {
+      id: serial("id").primaryKey(),
+      commentId: bigint("commentId", { mode: "number", unsigned: true }).notNull(),
+      userId: bigint("userId", { mode: "number", unsigned: true }).notNull(),
+      createdAt: timestamp("createdAt").defaultNow().notNull()
+    }, (table) => ({
+      userCommentUnique: uniqueIndex("comment_likes_user_comment_idx").on(table.commentId, table.userId)
     }));
     follows = mysqlTable("follows", {
       id: serial("id").primaryKey(),
@@ -33634,6 +33644,21 @@ function getDb() {
         createdAt TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
         UNIQUE KEY follows_follower_following_idx (followerId, followingId)
       )`);
+      await run2(`CREATE TABLE IF NOT EXISTS bookmarks (
+        id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+        userId BIGINT UNSIGNED NOT NULL,
+        postId BIGINT UNSIGNED NOT NULL,
+        createdAt TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        UNIQUE KEY bookmarks_user_post_idx (userId, postId)
+      )`);
+      await run2(`CREATE TABLE IF NOT EXISTS comment_likes (
+        id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+        commentId BIGINT UNSIGNED NOT NULL,
+        userId BIGINT UNSIGNED NOT NULL,
+        createdAt TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        UNIQUE KEY comment_likes_user_comment_idx (commentId, userId)
+      )`);
+      await run2("ALTER TABLE comments ADD COLUMN parentId BIGINT UNSIGNED NULL");
     })();
   }
   return instance;
@@ -33971,6 +33996,47 @@ async function listPostsByTag(tag2, viewerUserId) {
     isLikedByMe: sql`CASE WHEN ${postLikes.id} IS NOT NULL THEN 1 ELSE 0 END`,
     isRepostedByMe: sql`CASE WHEN ${reposts.id} IS NOT NULL THEN 1 ELSE 0 END`
   }).from(posts).leftJoin(users, eq(posts.userId, users.id)).leftJoin(postLikes, and(eq(postLikes.postId, posts.id), eq(postLikes.userId, sv))).leftJoin(reposts, and(eq(reposts.postId, posts.id), eq(reposts.userId, sv))).where(sql`FIND_IN_SET(${tag2}, ${posts.tags}) > 0`).orderBy(desc(posts.createdAt));
+  return rows.map((r) => ({
+    ...r,
+    isLikedByMe: Boolean(r.isLikedByMe),
+    isRepostedByMe: Boolean(r.isRepostedByMe),
+    isRepostEntry: false
+  }));
+}
+async function searchPosts(query, viewerUserId) {
+  if (!query.trim()) return [];
+  if (isMock) {
+    const q = query.toLowerCase();
+    return [...mockPosts].filter(
+      (p) => p.content?.toLowerCase().includes(q) || p.tags?.toLowerCase().includes(q) || p.authorName?.toLowerCase().includes(q)
+    ).sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime()).slice(0, 20).map(({ userId: _uid, ...row }) => ({
+      ...row,
+      isLikedByMe: false,
+      isRepostedByMe: false,
+      isRepostEntry: false
+    }));
+  }
+  const db = getDb();
+  const sv = viewerUserId ?? 0;
+  const likeQuery = `%${query}%`;
+  const rows = await db.select({
+    id: posts.id,
+    content: posts.content,
+    code: posts.code,
+    codeLanguage: posts.codeLanguage,
+    tags: posts.tags,
+    mediaUrl: posts.mediaUrl,
+    mediaType: posts.mediaType,
+    likesCount: posts.likesCount,
+    commentsCount: posts.commentsCount,
+    repostsCount: posts.repostsCount,
+    createdAt: posts.createdAt,
+    authorId: posts.userId,
+    authorName: users.name,
+    authorAvatar: users.avatar,
+    isLikedByMe: sql`CASE WHEN ${postLikes.id} IS NOT NULL THEN 1 ELSE 0 END`,
+    isRepostedByMe: sql`CASE WHEN ${reposts.id} IS NOT NULL THEN 1 ELSE 0 END`
+  }).from(posts).leftJoin(users, eq(posts.userId, users.id)).leftJoin(postLikes, and(eq(postLikes.postId, posts.id), eq(postLikes.userId, sv))).leftJoin(reposts, and(eq(reposts.postId, posts.id), eq(reposts.userId, sv))).where(sql`(${posts.content} LIKE ${likeQuery} OR ${posts.tags} LIKE ${likeQuery})`).orderBy(desc(posts.createdAt)).limit(20);
   return rows.map((r) => ({
     ...r,
     isLikedByMe: Boolean(r.isLikedByMe),
@@ -48390,7 +48456,7 @@ var init_zod = __esm({
 });
 
 // contracts/schemas.ts
-var createPostSchema, toggleLikeSchema, isLikedSchema, deletePostSchema, updatePostSchema, listCommentsSchema, createCommentSchema, deleteCommentSchema, toggleRepostSchema, quoteRepostSchema, listRepostsByUserSchema, sendMessageSchema, getThreadSchema, markReadSchema, searchUsersSchema, toggleFollowSchema, isFollowingSchema, getUserProfileSchema, listPostsSchema, listPostsByUserSchema, updateProfileSchema, getPostSchema, listByTagSchema, toggleBookmarkSchema, listBookmarksSchema, getSuggestedUsersSchema, getTrendingTagsSchema;
+var createPostSchema, toggleLikeSchema, isLikedSchema, deletePostSchema, updatePostSchema, listCommentsSchema, createCommentSchema, deleteCommentSchema, toggleRepostSchema, quoteRepostSchema, listRepostsByUserSchema, sendMessageSchema, getThreadSchema, markReadSchema, searchUsersSchema, toggleFollowSchema, isFollowingSchema, getUserProfileSchema, listPostsSchema, listPostsByUserSchema, updateProfileSchema, getPostSchema, listByTagSchema, toggleBookmarkSchema, listBookmarksSchema, getSuggestedUsersSchema, getTrendingTagsSchema, listFollowersSchema, toggleCommentLikeSchema, listRepliesSchema, searchPostsSchema;
 var init_schemas3 = __esm({
   "contracts/schemas.ts"() {
     init_zod();
@@ -48415,7 +48481,8 @@ var init_schemas3 = __esm({
     listCommentsSchema = external_exports.object({ postId: external_exports.number().int() });
     createCommentSchema = external_exports.object({
       postId: external_exports.number().int(),
-      content: external_exports.string().min(1).max(1e3)
+      content: external_exports.string().min(1).max(1e3),
+      parentId: external_exports.number().int().optional()
     });
     deleteCommentSchema = external_exports.object({ commentId: external_exports.number().int() });
     toggleRepostSchema = external_exports.object({ postId: external_exports.number().int() });
@@ -48445,6 +48512,10 @@ var init_schemas3 = __esm({
     listBookmarksSchema = external_exports.object({ viewerUserId: external_exports.number().int().optional() }).optional();
     getSuggestedUsersSchema = external_exports.object({ limit: external_exports.number().int().max(50).optional() });
     getTrendingTagsSchema = external_exports.object({ limit: external_exports.number().int().max(50).optional() });
+    listFollowersSchema = external_exports.object({ userId: external_exports.number().int() });
+    toggleCommentLikeSchema = external_exports.object({ commentId: external_exports.number().int() });
+    listRepliesSchema = external_exports.object({ commentId: external_exports.number().int() });
+    searchPostsSchema = external_exports.object({ query: external_exports.string().max(100) });
   }
 });
 
@@ -48474,10 +48545,10 @@ async function updateUserProfile(id, data) {
 async function searchUsers(query) {
   if (!query.trim()) return [];
   if (isMock2) {
-    return [...mockUserById.values()].filter((u) => u.name?.toLowerCase().includes(query.toLowerCase())).slice(0, 10).map((u) => ({ id: u.id, name: u.name, avatar: u.avatar }));
+    return [...mockUserById.values()].filter((u) => u.name?.toLowerCase().includes(query.toLowerCase())).slice(0, 10).map((u) => ({ id: u.id, name: u.name, avatar: u.avatar, bio: u.bio ?? null }));
   }
   const db = getDb();
-  return db.select({ id: users.id, name: users.name, avatar: users.avatar }).from(users).where(like(users.name, `%${query}%`)).limit(10);
+  return db.select({ id: users.id, name: users.name, avatar: users.avatar, bio: users.bio }).from(users).where(like(users.name, `%${query}%`)).limit(10);
 }
 async function getTrendingTags(limit = 10) {
   if (isMock2) {
@@ -48490,8 +48561,8 @@ async function getTrendingTags(limit = 10) {
     ].slice(0, limit);
   }
   const db = getDb();
-  const rows = await db.execute(sql`
-    SELECT tag, COUNT(*) AS count
+  const result = await db.execute(sql`
+    SELECT tag, COUNT(*) AS tagCount
     FROM (
       SELECT TRIM(SUBSTRING_INDEX(SUBSTRING_INDEX(tags, ',', n.n), ',', -1)) AS tag
       FROM \`posts\`
@@ -48504,12 +48575,13 @@ async function getTrendingTags(limit = 10) {
     ) t
     WHERE tag != ''
     GROUP BY tag
-    ORDER BY count DESC
+    ORDER BY tagCount DESC
     LIMIT ${limit}
   `);
-  return rows.map((r) => ({
-    tag: r.tag,
-    count: Number(r.count)
+  const rawRows = Array.isArray(result) && Array.isArray(result[0]) ? result[0] : result;
+  return rawRows.filter((r) => r && typeof r.tag === "string" && r.tag.trim() !== "").map((r) => ({
+    tag: r.tag.trim(),
+    count: Number(r.tagCount) || 0
   }));
 }
 async function getSuggestedUsers(limit = 5, excludeUserId) {
@@ -48544,12 +48616,10 @@ async function upsertUser(data) {
     return;
   }
   const values = { ...data };
-  const updateSet = { lastSignInAt: /* @__PURE__ */ new Date(), ...data };
   if (values.role === void 0 && values.unionId && values.unionId === env.ownerUnionId) {
     values.role = "admin";
-    updateSet.role = "admin";
   }
-  await getDb().insert(users).values(values).onDuplicateKeyUpdate({ set: updateSet });
+  await getDb().insert(users).values(values).onDuplicateKeyUpdate({ set: { lastSignInAt: /* @__PURE__ */ new Date() } });
 }
 var mockUserById, mockUserByUnionId, mockNextUserId, isMock2;
 var init_users = __esm({
@@ -48712,25 +48782,91 @@ var init_posts_router = __esm({
       ),
       listByTag: publicQuery.input(listByTagSchema).query(
         ({ ctx, input }) => listPostsByTag(input.tag, ctx?.user?.id)
+      ),
+      search: publicQuery.input(searchPostsSchema).query(
+        ({ ctx, input }) => searchPosts(input.query, ctx?.user?.id)
       )
     });
   }
 });
 
 // server/queries/comments.ts
-async function listComments(postId) {
+async function enrichWithLikes(rows, viewerUserId, repliesCountMap) {
+  if (rows.length === 0) return [];
+  const db = getDb();
+  const ids = rows.map((r) => r.id);
+  const likeCounts = await db.select({ commentId: commentLikes.commentId, total: count() }).from(commentLikes).where(inArray(commentLikes.commentId, ids)).groupBy(commentLikes.commentId);
+  const likeCountMap = new Map(likeCounts.map((l) => [l.commentId, l.total]));
+  let likedByMeSet = /* @__PURE__ */ new Set();
+  if (viewerUserId) {
+    const myLikes = await db.select({ commentId: commentLikes.commentId }).from(commentLikes).where(and(eq(commentLikes.userId, viewerUserId), inArray(commentLikes.commentId, ids)));
+    likedByMeSet = new Set(myLikes.map((l) => l.commentId));
+  }
+  return rows.map((r) => ({
+    ...r,
+    likesCount: likeCountMap.get(r.id) ?? 0,
+    isLikedByMe: likedByMeSet.has(r.id),
+    repliesCount: repliesCountMap?.get(r.id) ?? 0
+  }));
+}
+async function listComments(postId, viewerUserId) {
   if (isMock4) {
-    return mockComments.filter((c) => c.postId === postId).sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime()).map(({ postId: _pid, userId: _uid, ...row }) => row);
+    return mockComments.filter((c) => c.postId === postId && c.parentId === null).sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime()).map(({ postId: _pid, userId: _uid, ...row }) => ({
+      ...row,
+      likesCount: 0,
+      isLikedByMe: false,
+      repliesCount: mockComments.filter((r) => r.parentId === row.id).length
+    }));
   }
   const db = getDb();
-  return db.select({
+  const rows = await db.select({
     id: comments.id,
     content: comments.content,
     createdAt: comments.createdAt,
     authorId: comments.userId,
     authorName: users.name,
-    authorAvatar: users.avatar
-  }).from(comments).leftJoin(users, eq(comments.userId, users.id)).where(eq(comments.postId, postId)).orderBy(desc(comments.createdAt));
+    authorAvatar: users.avatar,
+    parentId: comments.parentId
+  }).from(comments).leftJoin(users, eq(comments.userId, users.id)).where(and(eq(comments.postId, postId), isNull2(comments.parentId))).orderBy(desc(comments.createdAt));
+  if (rows.length === 0) return [];
+  const ids = rows.map((r) => r.id);
+  const replyCounts = await db.select({ parentId: comments.parentId, total: count() }).from(comments).where(inArray(comments.parentId, ids)).groupBy(comments.parentId);
+  const repliesCountMap = new Map(
+    replyCounts.filter((r) => r.parentId !== null).map((r) => [r.parentId, r.total])
+  );
+  return enrichWithLikes(rows, viewerUserId, repliesCountMap);
+}
+async function listReplies(commentId, viewerUserId) {
+  if (isMock4) {
+    return mockComments.filter((c) => c.parentId === commentId).sort((a, b) => a.createdAt.getTime() - b.createdAt.getTime()).map(({ postId: _pid, userId: _uid, ...row }) => ({
+      ...row,
+      likesCount: 0,
+      isLikedByMe: false,
+      repliesCount: 0
+    }));
+  }
+  const db = getDb();
+  const rows = await db.select({
+    id: comments.id,
+    content: comments.content,
+    createdAt: comments.createdAt,
+    authorId: comments.userId,
+    authorName: users.name,
+    authorAvatar: users.avatar,
+    parentId: comments.parentId
+  }).from(comments).leftJoin(users, eq(comments.userId, users.id)).where(eq(comments.parentId, commentId)).orderBy(comments.createdAt);
+  return enrichWithLikes(rows, viewerUserId);
+}
+async function toggleCommentLike(userId, commentId) {
+  if (isMock4) return { liked: false };
+  const db = getDb();
+  const existing = await db.select().from(commentLikes).where(and(eq(commentLikes.userId, userId), eq(commentLikes.commentId, commentId))).limit(1);
+  if (existing.length > 0) {
+    await db.delete(commentLikes).where(eq(commentLikes.id, existing[0].id));
+    return { liked: false };
+  }
+  await db.insert(commentLikes).values({ userId, commentId });
+  return { liked: true };
 }
 async function createComment(data) {
   if (isMock4) {
@@ -48743,7 +48879,8 @@ async function createComment(data) {
       createdAt: /* @__PURE__ */ new Date(),
       authorId: data.userId,
       authorName: data.authorName,
-      authorAvatar: data.authorAvatar
+      authorAvatar: data.authorAvatar,
+      parentId: data.parentId ?? null
     });
     const post = mockPosts.find((p) => p.id === data.postId);
     if (post) post.commentsCount += 1;
@@ -48751,8 +48888,15 @@ async function createComment(data) {
   }
   const db = getDb();
   const [postRow] = await db.select({ userId: posts.userId }).from(posts).where(eq(posts.id, data.postId)).limit(1);
-  await db.insert(comments).values({ postId: data.postId, userId: data.userId, content: data.content });
-  await db.update(posts).set({ commentsCount: sql`${posts.commentsCount} + 1` }).where(eq(posts.id, data.postId));
+  await db.insert(comments).values({
+    postId: data.postId,
+    userId: data.userId,
+    content: data.content,
+    parentId: data.parentId ?? null
+  });
+  if (!data.parentId) {
+    await db.update(posts).set({ commentsCount: sql`${posts.commentsCount} + 1` }).where(eq(posts.id, data.postId));
+  }
   return { success: true, postOwnerId: postRow?.userId ?? null };
 }
 async function deleteComment(commentId, userId) {
@@ -48768,7 +48912,9 @@ async function deleteComment(commentId, userId) {
   const [comment] = await db.select().from(comments).where(eq(comments.id, commentId)).limit(1);
   if (!comment || comment.userId !== userId) return { success: false };
   await db.delete(comments).where(eq(comments.id, commentId));
-  await db.update(posts).set({ commentsCount: sql`${posts.commentsCount} - 1` }).where(eq(posts.id, comment.postId));
+  if (!comment.parentId) {
+    await db.update(posts).set({ commentsCount: sql`${posts.commentsCount} - 1` }).where(eq(posts.id, comment.postId));
+  }
   return { success: true };
 }
 var nextCommentId, mockComments, isMock4;
@@ -48784,6 +48930,7 @@ var init_comments = __esm({
         id: 1,
         postId: 1,
         userId: 3,
+        parentId: null,
         content: "tRPC es increible, especialmente con Next.js o Vite. Buen trabajo!",
         createdAt: new Date(Date.now() - 1 * 36e5),
         authorId: 3,
@@ -48794,6 +48941,7 @@ var init_comments = __esm({
         id: 2,
         postId: 2,
         userId: 2,
+        parentId: null,
         content: "Uso este patron en todos mis proyectos. Muy limpio.",
         createdAt: new Date(Date.now() - 4 * 36e5),
         authorId: 2,
@@ -48804,6 +48952,7 @@ var init_comments = __esm({
         id: 3,
         postId: 2,
         userId: 4,
+        parentId: null,
         content: "El tipo Result viene de Rust/Haskell, es un gran patron funcional.",
         createdAt: new Date(Date.now() - 3 * 36e5),
         authorId: 4,
@@ -48825,7 +48974,10 @@ var init_comments_router = __esm({
     init_notifications();
     commentsRouter = createRouter({
       list: publicQuery.input(listCommentsSchema).query(
-        ({ input }) => listComments(input.postId)
+        ({ ctx, input }) => listComments(input.postId, ctx.user?.id)
+      ),
+      listReplies: publicQuery.input(listRepliesSchema).query(
+        ({ ctx, input }) => listReplies(input.commentId, ctx.user?.id)
       ),
       create: authedQuery.input(createCommentSchema).mutation(async ({ ctx, input }) => {
         const result = await createComment({
@@ -48833,15 +48985,19 @@ var init_comments_router = __esm({
           userId: ctx.user.id,
           content: input.content,
           authorName: ctx.user.name ?? null,
-          authorAvatar: ctx.user.avatar ?? null
+          authorAvatar: ctx.user.avatar ?? null,
+          parentId: input.parentId ?? null
         });
-        if (result.postOwnerId) {
+        if (result.postOwnerId && !input.parentId) {
           void createNotification(ctx.user.id, result.postOwnerId, "comment", input.postId);
         }
         return result;
       }),
       delete: authedQuery.input(deleteCommentSchema).mutation(
         ({ ctx, input }) => deleteComment(input.commentId, ctx.user.id)
+      ),
+      toggleLike: authedQuery.input(toggleCommentLikeSchema).mutation(
+        ({ ctx, input }) => toggleCommentLike(ctx.user.id, input.commentId)
       )
     });
   }
@@ -49069,6 +49225,16 @@ async function getFollowerCount(userId) {
   const [row] = await db.select({ total: count() }).from(follows).where(eq(follows.followingId, userId));
   return row?.total ?? 0;
 }
+async function listFollowers(userId) {
+  if (isMock6) return [];
+  const db = getDb();
+  return db.select({ id: users.id, name: users.name, avatar: users.avatar, bio: users.bio }).from(follows).innerJoin(users, eq(users.id, follows.followerId)).where(eq(follows.followingId, userId));
+}
+async function listFollowingUsers(userId) {
+  if (isMock6) return [];
+  const db = getDb();
+  return db.select({ id: users.id, name: users.name, avatar: users.avatar, bio: users.bio }).from(follows).innerJoin(users, eq(users.id, follows.followingId)).where(eq(follows.followerId, userId));
+}
 async function getFollowingCount(userId) {
   if (isMock6) {
     return [...mockFollows].filter((k) => k.startsWith(`${userId}:`)).length;
@@ -49109,6 +49275,12 @@ var init_follows_router = __esm({
       ),
       listFollowing: authedQuery.query(
         ({ ctx }) => listFollowing(ctx.user.id)
+      ),
+      listFollowers: publicQuery.input(listFollowersSchema).query(
+        ({ input }) => listFollowers(input.userId)
+      ),
+      listFollowingUsers: publicQuery.input(listFollowersSchema).query(
+        ({ input }) => listFollowingUsers(input.userId)
       )
     });
   }

@@ -92,6 +92,7 @@ export function getDb() {
         createdAt TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
         UNIQUE KEY comment_likes_user_comment_idx (commentId, userId)
       )`);
+      await run("ALTER TABLE comments ADD COLUMN parentId BIGINT UNSIGNED NULL");
     })();
   }
   return instance;

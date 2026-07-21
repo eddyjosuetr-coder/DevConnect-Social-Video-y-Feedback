@@ -61,6 +61,7 @@ export const comments = mysqlTable("comments", {
   postId: bigint("postId", { mode: "number", unsigned: true }).notNull(),
   userId: bigint("userId", { mode: "number", unsigned: true }).notNull(),
   content: text("content").notNull(),
+  parentId: bigint("parentId", { mode: "number", unsigned: true }),
   createdAt: timestamp("createdAt").defaultNow().notNull(),
 });
 

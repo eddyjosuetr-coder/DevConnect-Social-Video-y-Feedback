@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from 'react';
-import { Code2, Smile, Search, X, Loader2, Heart } from 'lucide-react';
+import { Code2, Smile, Search, X, Loader2, Heart, MessageCircle, ChevronDown, ChevronUp } from 'lucide-react';
 import Picker from '@emoji-mart/react';
 import data from '@emoji-mart/data';
 import { trpc } from '@/providers/trpc';
@@ -9,7 +9,6 @@ import { fetchTrending, searchGifs, type GifItem } from '@/lib/giphy';
 import type { Toast } from '@/hooks/useToast';
 
 // ── Content encoding helpers ──────────────────────────────────────────────────
-// Format: "plain text\n```lang\ncode\n```\n[gif:url]"
 
 function buildContent(text: string, code: string, lang: string, gifUrl: string): string {
   let result = text.trim();
@@ -29,7 +28,6 @@ function parseContent(raw: string): Segment[] {
   const gifRe  = /\[gif:(https?:\/\/[^\]]+)\]/g;
   let combined = raw;
 
-  // Extract code blocks
   const codeBlocks: Array<{ full: string; lang: string; code: string }> = [];
   combined = combined.replace(codeRe, (full, lang, code: string) => {
     const placeholder = `\0CODE${codeBlocks.length}\0`;
@@ -37,7 +35,6 @@ function parseContent(raw: string): Segment[] {
     return placeholder;
   });
 
-  // Extract GIF references
   const gifs: Array<{ full: string; url: string }> = [];
   combined = combined.replace(gifRe, (full, url: string) => {
     const placeholder = `\0GIF${gifs.length}\0`;
@@ -45,7 +42,6 @@ function parseContent(raw: string): Segment[] {
     return placeholder;
   });
 
-  // Split remaining text by placeholders
   const parts = combined.split(/(\0CODE\d+\0|\0GIF\d+\0)/);
   for (const part of parts) {
     const codeMatch = part.match(/\0CODE(\d+)\0/);
@@ -91,7 +87,6 @@ function CommentBody({ content }: { content: string }) {
             </div>
           );
         }
-        // gif
         return (
           <img key={i} src={seg.url} alt="gif" className="rounded-xl max-h-48 max-w-full block" style={{ objectFit: 'cover' }} loading="lazy" />
         );
@@ -225,7 +220,7 @@ const CODE_LANGUAGES = [
   'java', 'sql', 'bash', 'json', 'yaml', 'css', 'html', 'tsx', 'dockerfile',
 ];
 
-// ── CommentSection ────────────────────────────────────────────────────────────
+// ── CommentRow type ───────────────────────────────────────────────────────────
 type CommentRow = {
   id: number;
   content: string;
@@ -235,8 +230,271 @@ type CommentRow = {
   authorAvatar: string | null;
   likesCount: number;
   isLikedByMe: boolean;
+  parentId: number | null;
+  repliesCount: number;
 };
 
+// ── Mini reply form ───────────────────────────────────────────────────────────
+interface ReplyFormProps {
+  postId: number;
+  parentId: number;
+  onCancel: () => void;
+  onSuccess: (reply: CommentRow) => void;
+  addToast: (message: string, type: Toast['type']) => void;
+}
+
+function ReplyForm({ postId, parentId, onCancel, onSuccess, addToast }: ReplyFormProps) {
+  const { user } = useAuth();
+  const [text, setText] = useState('');
+
+  const createReply = trpc.comments.create.useMutation({
+    onSuccess: () => {
+      const optimistic: CommentRow = {
+        id: Date.now(),
+        content: text.trim(),
+        createdAt: new Date(),
+        authorId: user?.id ?? 0,
+        authorName: user?.name ?? 'Tú',
+        authorAvatar: user?.avatar ?? null,
+        likesCount: 0,
+        isLikedByMe: false,
+        parentId,
+        repliesCount: 0,
+      };
+      setText('');
+      onSuccess(optimistic);
+      addToast('Respuesta publicada!', 'success');
+    },
+    onError: (err) => addToast(`Error: ${err.message}`, 'error'),
+  });
+
+  function handleSubmit() {
+    const content = text.trim();
+    if (!content) return;
+    createReply.mutate({ postId, content, parentId });
+  }
+
+  return (
+    <div className="mt-2 ml-10 flex gap-2 items-start">
+      <div className="flex-1 bg-[#0A0D18] border border-[#2A3347] rounded-xl px-3 py-2 focus-within:border-[#3B82F6] transition-colors">
+        <textarea
+          autoFocus
+          rows={1}
+          value={text}
+          onChange={(e) => setText(e.target.value)}
+          onKeyDown={(e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); handleSubmit(); } }}
+          placeholder="Escribe una respuesta..."
+          className="w-full bg-transparent text-sm text-[#f3f2f2] resize-none outline-none placeholder:text-[#3A4460] leading-relaxed"
+        />
+      </div>
+      <div className="flex gap-1.5 shrink-0 mt-1">
+        <button
+          onClick={onCancel}
+          className="px-3 py-1.5 rounded-full text-xs text-[#5A6680] border border-[#2A3347] hover:border-[#3D4E68] transition-colors"
+        >
+          Cancelar
+        </button>
+        <button
+          onClick={handleSubmit}
+          disabled={!text.trim() || createReply.isPending}
+          className="px-3 py-1.5 rounded-full text-xs font-bold bg-[#3B82F6] text-white disabled:opacity-40 transition-opacity"
+        >
+          {createReply.isPending ? <Loader2 size={11} className="animate-spin" /> : 'Responder'}
+        </button>
+      </div>
+    </div>
+  );
+}
+
+// ── Replies list ──────────────────────────────────────────────────────────────
+interface RepliesListProps {
+  commentId: number;
+  extraReplies: CommentRow[];
+}
+
+function RepliesList({ commentId, extraReplies }: RepliesListProps) {
+  const { user } = useAuth();
+  const utils = trpc.useUtils();
+  const [localReplies, setLocalReplies] = useState<CommentRow[]>([]);
+  const [loaded, setLoaded] = useState(false);
+
+  const { data: serverReplies, isLoading } = trpc.comments.listReplies.useQuery({ commentId });
+
+  useEffect(() => {
+    if (serverReplies && !loaded) {
+      setLocalReplies(serverReplies);
+      setLoaded(true);
+    }
+  }, [serverReplies, loaded]);
+
+  const allReplies = loaded
+    ? [...localReplies, ...extraReplies.filter((r) => !localReplies.find((lr) => lr.id === r.id))]
+    : [...(serverReplies ?? []), ...extraReplies];
+
+  const likeReply = trpc.comments.toggleLike.useMutation({
+    onSuccess: (res, vars) => {
+      setLocalReplies((prev) =>
+        prev.map((r) =>
+          r.id === vars.commentId
+            ? { ...r, likesCount: res.liked ? r.likesCount + 1 : Math.max(0, r.likesCount - 1), isLikedByMe: res.liked }
+            : r,
+        ),
+      );
+      void utils.comments.listReplies.invalidate({ commentId });
+    },
+  });
+
+  if (isLoading) {
+    return (
+      <div className="ml-10 mt-2 flex items-center gap-2 text-xs text-[#5A6680]">
+        <Loader2 size={11} className="animate-spin" />
+        Cargando respuestas...
+      </div>
+    );
+  }
+
+  if (allReplies.length === 0) return null;
+
+  return (
+    <div className="ml-10 mt-2 space-y-2 border-l-2 border-[#1E2535] pl-3">
+      {allReplies.map((r) => (
+        <div key={r.id} className="flex items-start gap-2">
+          {r.authorAvatar ? (
+            <img src={r.authorAvatar} alt="" className="w-6 h-6 rounded-full object-cover shrink-0" />
+          ) : (
+            <div className="w-6 h-6 rounded-full bg-[#3B82F6]/20 flex items-center justify-center text-[#3B82F6] font-bold text-[9px] shrink-0">
+              {(r.authorName ?? 'D').charAt(0)}
+            </div>
+          )}
+          <div className="bg-[#0A0D18] px-3 py-2 flex-1 rounded-xl min-w-0">
+            <div className="flex items-center justify-between mb-1">
+              <div className="flex items-center gap-1.5">
+                <span className="text-xs text-[#e1ff00] font-semibold">{r.authorName ?? 'Developer'}</span>
+                <span className="text-[#5A6680] text-[10px]">· {formatDate(r.createdAt)}</span>
+              </div>
+              {user && (
+                <button
+                  onClick={() => likeReply.mutate({ commentId: r.id })}
+                  disabled={likeReply.isPending}
+                  className="flex items-center gap-1 text-xs transition-colors disabled:opacity-50 shrink-0 ml-2"
+                  style={{ color: r.isLikedByMe ? '#EF4444' : '#5A6680' }}
+                >
+                  <Heart size={10} fill={r.isLikedByMe ? '#EF4444' : 'none'} />
+                  {r.likesCount > 0 && <span className="tabular-nums text-[10px]">{r.likesCount}</span>}
+                </button>
+              )}
+            </div>
+            <CommentBody content={r.content} />
+          </div>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+// ── CommentThread — one top-level comment + its replies ───────────────────────
+interface CommentThreadProps {
+  comment: CommentRow;
+  postId: number;
+  user: { id: number; name?: string | null; avatar?: string | null } | null;
+  onLike: (commentId: number) => void;
+  likePending: boolean;
+  addToast: (message: string, type: Toast['type']) => void;
+}
+
+function CommentThread({ comment: c, postId, user, onLike, likePending, addToast }: CommentThreadProps) {
+  const [showReplies, setShowReplies] = useState(false);
+  const [showReplyForm, setShowReplyForm] = useState(false);
+  const [optimisticReplies, setOptimisticReplies] = useState<CommentRow[]>([]);
+  const [repliesCount, setRepliesCount] = useState(c.repliesCount);
+
+  function handleReplySuccess(reply: CommentRow) {
+    setOptimisticReplies((prev) => [...prev, reply]);
+    setRepliesCount((n) => n + 1);
+    setShowReplies(true);
+    setShowReplyForm(false);
+  }
+
+  const totalReplies = repliesCount + (repliesCount === 0 ? optimisticReplies.length : 0);
+
+  return (
+    <div className="mb-4">
+      {/* Comment */}
+      <div className="flex items-start gap-2">
+        {c.authorAvatar ? (
+          <img src={c.authorAvatar} alt="" className="w-8 h-8 rounded-full object-cover shrink-0" />
+        ) : (
+          <div className="w-8 h-8 rounded-full bg-[#3B82F6]/20 flex items-center justify-center text-[#3B82F6] font-bold text-xs shrink-0">
+            {(c.authorName ?? 'D').charAt(0)}
+          </div>
+        )}
+        <div className="bg-[#0F131D] px-3 py-2.5 flex-1 rounded-xl min-w-0">
+          <div className="flex items-center justify-between mb-1.5">
+            <div className="flex items-center gap-1.5">
+              <span className="text-xs text-[#e1ff00] font-semibold">{c.authorName ?? 'Developer'}</span>
+              <span className="text-[#5A6680] text-xs">· {formatDate(c.createdAt)}</span>
+            </div>
+            {user && (
+              <button
+                onClick={() => onLike(c.id)}
+                disabled={likePending}
+                className="flex items-center gap-1 text-xs transition-colors disabled:opacity-50 shrink-0 ml-2"
+                style={{ color: c.isLikedByMe ? '#EF4444' : '#5A6680' }}
+              >
+                <Heart size={11} fill={c.isLikedByMe ? '#EF4444' : 'none'} />
+                {c.likesCount > 0 && <span className="tabular-nums">{c.likesCount}</span>}
+              </button>
+            )}
+          </div>
+          <CommentBody content={c.content} />
+        </div>
+      </div>
+
+      {/* Actions below comment */}
+      <div className="ml-10 mt-1 flex items-center gap-3">
+        {user && (
+          <button
+            onClick={() => setShowReplyForm((v) => !v)}
+            className="flex items-center gap-1 text-[10px] text-[#5A6680] hover:text-[#3B82F6] transition-colors"
+          >
+            <MessageCircle size={11} />
+            Responder
+          </button>
+        )}
+        {totalReplies > 0 && (
+          <button
+            onClick={() => setShowReplies((v) => !v)}
+            className="flex items-center gap-1 text-[10px] text-[#5A6680] hover:text-[#e1ff00] transition-colors"
+          >
+            {showReplies ? <ChevronUp size={11} /> : <ChevronDown size={11} />}
+            {showReplies ? 'Ocultar respuestas' : `Ver ${totalReplies} ${totalReplies === 1 ? 'respuesta' : 'respuestas'}`}
+          </button>
+        )}
+      </div>
+
+      {/* Reply form */}
+      {showReplyForm && (
+        <ReplyForm
+          postId={postId}
+          parentId={c.id}
+          onCancel={() => setShowReplyForm(false)}
+          onSuccess={handleReplySuccess}
+          addToast={addToast}
+        />
+      )}
+
+      {/* Replies list */}
+      {showReplies && (
+        <RepliesList
+          commentId={c.id}
+          extraReplies={optimisticReplies}
+        />
+      )}
+    </div>
+  );
+}
+
+// ── CommentSection ────────────────────────────────────────────────────────────
 interface CommentSectionProps {
   postId: number;
   isOpen: boolean;
@@ -322,6 +580,8 @@ export default function CommentSection({ postId, isOpen, addToast }: CommentSect
       authorAvatar: null,
       likesCount: 0,
       isLikedByMe: false,
+      parentId: null,
+      repliesCount: 0,
     };
     setLocalComments((prev) => [optimistic, ...prev]);
     setText('');
@@ -345,35 +605,15 @@ export default function CommentSection({ postId, isOpen, addToast }: CommentSect
         <p className="text-[#5A6680] text-sm text-center py-4">Sin comentarios. Se el primero!</p>
       )}
       {displayComments.map((c) => (
-        <div key={c.id} className="flex items-start gap-2 mb-3">
-          {c.authorAvatar ? (
-            <img src={c.authorAvatar} alt="" className="w-8 h-8 rounded-full object-cover shrink-0" />
-          ) : (
-            <div className="w-8 h-8 rounded-full bg-[#3B82F6]/20 flex items-center justify-center text-[#3B82F6] font-bold text-xs shrink-0">
-              {(c.authorName ?? 'D').charAt(0)}
-            </div>
-          )}
-          <div className="bg-[#0F131D] px-3 py-2.5 flex-1 rounded-xl min-w-0">
-            <div className="flex items-center justify-between mb-1.5">
-              <div className="flex items-center gap-1.5">
-                <span className="text-xs text-[#e1ff00] font-semibold">{c.authorName ?? 'Developer'}</span>
-                <span className="text-[#5A6680] text-xs">· {formatDate(c.createdAt)}</span>
-              </div>
-              {user && (
-                <button
-                  onClick={() => likeComment.mutate({ commentId: c.id })}
-                  disabled={likeComment.isPending}
-                  className="flex items-center gap-1 text-xs transition-colors disabled:opacity-50 shrink-0 ml-2"
-                  style={{ color: c.isLikedByMe ? '#EF4444' : '#5A6680' }}
-                >
-                  <Heart size={11} fill={c.isLikedByMe ? '#EF4444' : 'none'} />
-                  {c.likesCount > 0 && <span className="tabular-nums">{c.likesCount}</span>}
-                </button>
-              )}
-            </div>
-            <CommentBody content={c.content} />
-          </div>
-        </div>
+        <CommentThread
+          key={c.id}
+          comment={c}
+          postId={postId}
+          user={user}
+          onLike={(commentId) => likeComment.mutate({ commentId })}
+          likePending={likeComment.isPending}
+          addToast={addToast}
+        />
       ))}
 
       {/* Rich input */}
@@ -394,7 +634,6 @@ export default function CommentSection({ postId, isOpen, addToast }: CommentSect
             onKeyDown={(e) => { if (e.key === 'Enter' && !e.shiftKey && !showCode) { e.preventDefault(); handleSubmit(); } }}
             placeholder="Escribe un comentario..."
             className="w-full bg-transparent text-sm text-[#f3f2f2] resize-none outline-none placeholder:text-[#3A4460] leading-relaxed"
-            style={{ transition: 'rows 0.2s' }}
           />
         </div>
 
@@ -444,9 +683,7 @@ export default function CommentSection({ postId, isOpen, addToast }: CommentSect
 
         {/* Toolbar */}
         <div className="relative px-3 py-2 border-t border-[#1A2030] flex items-center justify-between">
-          {/* Left tools */}
           <div className="flex items-center gap-1">
-            {/* Code */}
             <button
               onClick={() => setShowCode(!showCode)}
               title="Agregar código"
@@ -455,7 +692,6 @@ export default function CommentSection({ postId, isOpen, addToast }: CommentSect
             >
               <Code2 size={15} />
             </button>
-            {/* Emoji */}
             <button
               onClick={() => { setShowGifs(false); setShowEmoji(!showEmoji); }}
               title="Emoji"
@@ -464,7 +700,6 @@ export default function CommentSection({ postId, isOpen, addToast }: CommentSect
             >
               <Smile size={15} />
             </button>
-            {/* GIF */}
             <button
               onClick={() => { setShowEmoji(false); setShowGifs(!showGifs); }}
               title="GIF"
@@ -475,11 +710,9 @@ export default function CommentSection({ postId, isOpen, addToast }: CommentSect
             </button>
           </div>
 
-          {/* Pickers (portal upward) */}
           {showEmoji && <EmojiPanel onSelect={insertEmoji} onClose={() => setShowEmoji(false)} />}
           {showGifs  && <GifPicker  onSelect={selectGif}  onClose={() => setShowGifs(false)}  />}
 
-          {/* Send */}
           <button
             onClick={handleSubmit}
             disabled={!hasContent || createComment.isPending}
