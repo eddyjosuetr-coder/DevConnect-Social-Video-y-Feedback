@@ -89,8 +89,8 @@ export async function getTrendingTags(limit = 10): Promise<Array<{ tag: string; 
     ].slice(0, limit);
   }
   const db = getDb();
-  const rows = await db.execute(sql`
-    SELECT tag, COUNT(*) AS count
+  const result = await db.execute(sql`
+    SELECT tag, COUNT(*) AS tagCount
     FROM (
       SELECT TRIM(SUBSTRING_INDEX(SUBSTRING_INDEX(tags, ',', n.n), ',', -1)) AS tag
       FROM \`posts\`
@@ -103,13 +103,19 @@ export async function getTrendingTags(limit = 10): Promise<Array<{ tag: string; 
     ) t
     WHERE tag != ''
     GROUP BY tag
-    ORDER BY count DESC
+    ORDER BY tagCount DESC
     LIMIT ${limit}
   `);
-  return (rows as unknown as Array<{ tag: string; count: string | number }>).map((r) => ({
-    tag: r.tag,
-    count: Number(r.count),
-  }));
+  // db.execute may return [rows, fields] tuple or rows directly depending on driver
+  const rawRows = (Array.isArray(result) && Array.isArray(result[0]))
+    ? (result[0] as Array<{ tag: string; tagCount: string | number }>)
+    : (result as unknown as Array<{ tag: string; tagCount: string | number }>);
+  return rawRows
+    .filter((r) => r && typeof r.tag === 'string' && r.tag.trim() !== '')
+    .map((r) => ({
+      tag: r.tag.trim(),
+      count: Number(r.tagCount) || 0,
+    }));
 }
 
 export async function getSuggestedUsers(

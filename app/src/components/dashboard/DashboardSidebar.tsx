@@ -50,8 +50,9 @@ function Avatar({ user, size = 10 }: { user: AuthUser; size?: number }) {
 }
 
 function UnreadBadge({ count }: { count: number }) {
-  if (count <= 0) return null;
-  const label = count >= 10 ? '9+' : String(count);
+  const n = Number(count);
+  if (!Number.isFinite(n) || n <= 0) return null;
+  const label = n >= 10 ? '9+' : String(n);
   return (
     <span className="ml-auto min-w-[18px] h-[18px] px-1 rounded-full bg-[#EF4444] flex items-center justify-center text-[10px] font-black text-white leading-none">
       {label}
