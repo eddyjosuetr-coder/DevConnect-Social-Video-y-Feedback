@@ -70,3 +70,4 @@ export const getTrendingTagsSchema = z.object({ limit: z.number().int().max(50).
 
 export const listFollowersSchema = z.object({ userId: z.number().int() });
 export const toggleCommentLikeSchema = z.object({ commentId: z.number().int() });
+export const searchPostsSchema = z.object({ query: z.string().max(100) });

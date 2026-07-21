@@ -62,17 +62,17 @@ export async function updateUserProfile(
     .where(eq(schema.users.id, id));
 }
 
-export async function searchUsers(query: string): Promise<Array<{ id: number; name: string | null; avatar: string | null }>> {
+export async function searchUsers(query: string): Promise<Array<{ id: number; name: string | null; avatar: string | null; bio: string | null }>> {
   if (!query.trim()) return [];
   if (isMock) {
     return [...mockUserById.values()]
       .filter((u) => u.name?.toLowerCase().includes(query.toLowerCase()))
       .slice(0, 10)
-      .map((u) => ({ id: u.id, name: u.name, avatar: u.avatar }));
+      .map((u) => ({ id: u.id, name: u.name, avatar: u.avatar, bio: u.bio ?? null }));
   }
   const db = getDb();
   return db
-    .select({ id: schema.users.id, name: schema.users.name, avatar: schema.users.avatar })
+    .select({ id: schema.users.id, name: schema.users.name, avatar: schema.users.avatar, bio: schema.users.bio })
     .from(schema.users)
     .where(like(schema.users.name, `%${query}%`))
     .limit(10);

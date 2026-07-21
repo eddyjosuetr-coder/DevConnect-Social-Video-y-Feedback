@@ -1,6 +1,6 @@
 import { createRouter, publicQuery, authedQuery } from "./middleware";
-import { listPosts, listPostsByUser, createPost, toggleLike, isLiked, deletePost, updatePost, listFeed, getPostById, listPostsByTag } from "./queries/posts";
-import { listPostsSchema, createPostSchema, toggleLikeSchema, isLikedSchema, deletePostSchema, listPostsByUserSchema, updatePostSchema, getPostSchema, listByTagSchema } from "@contracts/schemas";
+import { listPosts, listPostsByUser, createPost, toggleLike, isLiked, deletePost, updatePost, listFeed, getPostById, listPostsByTag, searchPosts } from "./queries/posts";
+import { listPostsSchema, createPostSchema, toggleLikeSchema, isLikedSchema, deletePostSchema, listPostsByUserSchema, updatePostSchema, getPostSchema, listByTagSchema, searchPostsSchema } from "@contracts/schemas";
 import { createNotification } from "./queries/notifications";
 
 export const postsRouter = createRouter({
@@ -57,5 +57,9 @@ export const postsRouter = createRouter({
 
   listByTag: publicQuery.input(listByTagSchema).query(({ ctx, input }) =>
     listPostsByTag(input.tag, ctx?.user?.id)
+  ),
+
+  search: publicQuery.input(searchPostsSchema).query(({ ctx, input }) =>
+    searchPosts(input.query, ctx?.user?.id)
   ),
 });

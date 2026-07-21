@@ -429,6 +429,48 @@ export async function listPostsByTag(tag: string, viewerUserId?: number): Promis
   }));
 }
 
+export async function searchPosts(query: string, viewerUserId?: number): Promise<PostRow[]> {
+  if (!query.trim()) return [];
+  if (isMock) {
+    const q = query.toLowerCase();
+    return [...mockPosts]
+      .filter((p) =>
+        p.content?.toLowerCase().includes(q) ||
+        p.tags?.toLowerCase().includes(q) ||
+        p.authorName?.toLowerCase().includes(q)
+      )
+      .sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime())
+      .slice(0, 20)
+      .map(({ userId: _uid, ...row }) => ({
+        ...row, isLikedByMe: false, isRepostedByMe: false, isRepostEntry: false,
+      }));
+  }
+  const db = getDb();
+  const sv = viewerUserId ?? 0;
+  const likeQuery = `%${query}%`;
+  const rows = await db.select({
+    id: posts.id, content: posts.content, code: posts.code,
+    codeLanguage: posts.codeLanguage, tags: posts.tags,
+    mediaUrl: posts.mediaUrl, mediaType: posts.mediaType,
+    likesCount: posts.likesCount, commentsCount: posts.commentsCount,
+    repostsCount: posts.repostsCount, createdAt: posts.createdAt,
+    authorId: posts.userId, authorName: users.name, authorAvatar: users.avatar,
+    isLikedByMe: sql<number>`CASE WHEN ${postLikes.id} IS NOT NULL THEN 1 ELSE 0 END`,
+    isRepostedByMe: sql<number>`CASE WHEN ${reposts.id} IS NOT NULL THEN 1 ELSE 0 END`,
+  })
+  .from(posts)
+  .leftJoin(users, eq(posts.userId, users.id))
+  .leftJoin(postLikes, and(eq(postLikes.postId, posts.id), eq(postLikes.userId, sv)))
+  .leftJoin(reposts, and(eq(reposts.postId, posts.id), eq(reposts.userId, sv)))
+  .where(sql`(${posts.content} LIKE ${likeQuery} OR ${posts.tags} LIKE ${likeQuery})`)
+  .orderBy(desc(posts.createdAt))
+  .limit(20);
+  return rows.map((r) => ({
+    ...r, isLikedByMe: Boolean(r.isLikedByMe),
+    isRepostedByMe: Boolean(r.isRepostedByMe), isRepostEntry: false as const,
+  }));
+}
+
 export async function updatePost(
   postId: number,
   userId: number,
