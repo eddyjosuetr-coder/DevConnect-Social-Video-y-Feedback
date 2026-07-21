@@ -165,15 +165,15 @@ export async function upsertUser(data: InsertUser): Promise<void> {
   }
 
   const values = { ...data };
-  const updateSet: Partial<InsertUser> = { lastSignInAt: new Date(), ...data };
 
   if (values.role === undefined && values.unionId && values.unionId === env.ownerUnionId) {
     values.role = "admin";
-    updateSet.role = "admin";
   }
 
+  // On conflict (existing user), only update lastSignInAt — never overwrite
+  // name/avatar that the user may have customized via EditProfile
   await getDb()
     .insert(schema.users)
     .values(values)
-    .onDuplicateKeyUpdate({ set: updateSet });
+    .onDuplicateKeyUpdate({ set: { lastSignInAt: new Date() } });
 }
