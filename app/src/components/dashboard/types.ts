@@ -1,4 +1,4 @@
-export type ActiveTab = 'feed' | 'explore' | 'notifications' | 'messages' | 'bookmarks' | 'profile';
+export type ActiveTab = 'feed' | 'explore' | 'notifications' | 'messages' | 'bookmarks' | 'profile' | 'admin';
 
 export type Post = {
   id: number;

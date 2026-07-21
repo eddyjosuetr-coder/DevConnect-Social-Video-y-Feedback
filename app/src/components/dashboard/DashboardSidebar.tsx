@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { Home, TrendingUp, Bell, Mail, Bookmark, User, X, LogOut } from 'lucide-react';
+import { Home, TrendingUp, Bell, Mail, Bookmark, User, X, LogOut, ShieldCheck } from 'lucide-react';
 import type { ActiveTab } from './types';
 import type { User as AuthUser } from '@db/schema';
 
@@ -134,6 +134,29 @@ export default function DashboardSidebar({
             unreadMsgCount={unreadMsgCount}
           />
         ))}
+        {user.role === 'admin' && (
+          <button
+            onClick={() => { onTabChange('admin'); if (isMobile) onCloseMobile(); }}
+            className="relative w-full flex items-center gap-4 px-4 py-3 text-[15px] rounded-xl transition-all text-left overflow-hidden mt-1"
+            style={{
+              color: activeTab === 'admin' ? '#e1ff00' : '#5A6680',
+              backgroundColor: activeTab === 'admin' ? 'rgba(225,255,0,0.06)' : 'transparent',
+              fontWeight: activeTab === 'admin' ? 700 : 400,
+              borderTop: '1px solid rgba(42,51,71,0.5)',
+            }}
+            onMouseEnter={(e) => { if (activeTab !== 'admin') (e.currentTarget as HTMLElement).style.backgroundColor = 'rgba(255,255,255,0.04)'; }}
+            onMouseLeave={(e) => { if (activeTab !== 'admin') (e.currentTarget as HTMLElement).style.backgroundColor = 'transparent'; }}
+          >
+            {activeTab === 'admin' && (
+              <span
+                className="absolute left-0 top-1/2 -translate-y-1/2 w-0.5 h-6 rounded-r"
+                style={{ backgroundColor: '#e1ff00', boxShadow: '0 0 8px #e1ff00' }}
+              />
+            )}
+            <ShieldCheck size={22} strokeWidth={activeTab === 'admin' ? 2.5 : 1.5} />
+            <span>Admin</span>
+          </button>
+        )}
       </nav>
 
       {/* Post Button */}

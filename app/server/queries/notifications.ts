@@ -1,11 +1,48 @@
-import { eq, isNull, and, desc } from "drizzle-orm";
+import { eq, isNull, and, desc, like } from "drizzle-orm";
 import { getDb } from "./connection";
 import { notifications, users } from "@db/schema";
 import { mockUserById } from "./users";
 
+export function extractMentions(content: string): string[] {
+  const matches = content.match(/@([\wÀ-ɏ]+)/g) ?? [];
+  return [...new Set(matches.map((m) => m.slice(1).toLowerCase()))];
+}
+
+export async function notifyMentions(
+  content: string,
+  actorId: number,
+  postId?: number,
+): Promise<void> {
+  const names = extractMentions(content);
+  if (names.length === 0) return;
+  if (isMock) {
+    for (const name of names) {
+      const found = [...mockUserById.values()].find(
+        (u) => u.name?.toLowerCase() === name,
+      );
+      if (found && found.id !== actorId) {
+        void createNotification(actorId, found.id, "mention", postId);
+      }
+    }
+    return;
+  }
+  const db = getDb();
+  for (const name of names) {
+    const rows = await db
+      .select({ id: users.id })
+      .from(users)
+      .where(like(users.name, name))
+      .limit(1);
+    const recipient = rows.at(0);
+    if (recipient && recipient.id !== actorId) {
+      void createNotification(actorId, recipient.id, "mention", postId);
+    }
+  }
+}
+
 const isMock = !process.env.DATABASE_URL;
 
-export type NotifType = "like" | "comment" | "repost" | "follow";
+export type NotifType = "like" | "comment" | "repost" | "follow" | "mention";
 
 export type NotifRow = {
   id: number;

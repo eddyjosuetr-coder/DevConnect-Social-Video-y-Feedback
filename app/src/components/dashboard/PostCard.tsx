@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router';
-import { Heart, MessageCircle, Repeat2, Share2, Verified, Bookmark, Copy, Check, Pencil, MoreHorizontal, Trash2, Edit3 } from 'lucide-react';
+import { Heart, MessageCircle, Repeat2, Share2, Verified, Bookmark, Copy, Check, Pencil, MoreHorizontal, Trash2, Edit3, Flag } from 'lucide-react';
 import { trpc } from '@/providers/trpc';
 import { formatDate } from '@/lib/utils';
 import { useAuth } from '@/hooks/useAuth';
@@ -52,8 +52,19 @@ export default function PostCard({ post, addToast, isSaved = false, onToggleSave
   const [menuOpen, setMenuOpen] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [editOpen, setEditOpen] = useState(false);
+  const [reportOpen, setReportOpen] = useState(false);
+  const [reportReason, setReportReason] = useState('');
 
   const isOwnPost = !!user && user.id === localPost.authorId;
+
+  const createReport = trpc.reports.create.useMutation({
+    onSuccess: () => {
+      setReportOpen(false);
+      setReportReason('');
+      addToast('Reporte enviado', 'success');
+    },
+    onError: (err) => addToast(`Error: ${err.message}`, 'error'),
+  });
 
   const toggleLike = trpc.posts.toggleLike.useMutation();
   const toggleRepost = trpc.reposts.toggle.useMutation();
@@ -127,6 +138,15 @@ export default function PostCard({ post, addToast, isSaved = false, onToggleSave
 
   const codeLines = (localPost.code ?? '').split('\n');
 
+  function renderContent(text: string) {
+    const parts = text.split(/(@[\wÀ-ɏ]+)/g);
+    return parts.map((part, i) =>
+      /^@[\wÀ-ɏ]+$/.test(part)
+        ? <span key={i} className="text-[#3B82F6] font-medium">{part}</span>
+        : <span key={i}>{part}</span>
+    );
+  }
+
   if (deleted) return null;
 
   return (
@@ -160,7 +180,7 @@ export default function PostCard({ post, addToast, isSaved = false, onToggleSave
             <span className="text-[#3D4E68] text-sm font-mono">@{handle}</span>
             <span className="text-[#2A3347] text-sm">·</span>
             <span className="text-[#3D4E68] text-xs font-mono">{formatDate(localPost.createdAt)}</span>
-            {isOwnPost && (
+            {user && (
               <div className="relative ml-auto shrink-0">
                 <button
                   onClick={() => { setMenuOpen((v) => !v); setConfirmDelete(false); }}
@@ -175,42 +195,52 @@ export default function PostCard({ post, addToast, isSaved = false, onToggleSave
                       className="absolute right-0 top-full mt-1 z-[101] rounded-xl border border-[#1E2535] shadow-2xl overflow-hidden min-w-[190px]"
                       style={{ background: '#0D1220' }}
                     >
-                      {!confirmDelete ? (
-                        <>
-                          <button
-                            onClick={() => { setMenuOpen(false); setEditOpen(true); }}
-                            className="w-full flex items-center gap-2.5 px-4 py-3 text-sm text-[#C9D5E8] hover:bg-[#1E2535] hover:text-[#f3f2f2] transition-colors text-left"
-                          >
-                            <Edit3 size={13} className="text-[#3B82F6]" />
-                            Editar publicación
-                          </button>
-                          <button
-                            onClick={() => setConfirmDelete(true)}
-                            className="w-full flex items-center gap-2.5 px-4 py-3 text-sm text-[#EF4444] hover:bg-[#EF4444]/10 transition-colors text-left border-t border-[#1E2535]"
-                          >
-                            <Trash2 size={13} />
-                            Eliminar publicación
-                          </button>
-                        </>
-                      ) : (
-                        <div className="px-4 py-3 space-y-2">
-                          <p className="text-xs text-[#C9D5E8] font-medium">¿Eliminar este post?</p>
-                          <div className="flex gap-2">
+                      {isOwnPost ? (
+                        !confirmDelete ? (
+                          <>
                             <button
-                              onClick={() => setConfirmDelete(false)}
-                              className="flex-1 py-1.5 rounded-lg text-xs font-semibold text-[#8B9AB0] hover:text-[#f3f2f2] hover:bg-[#1E2535] transition-all"
+                              onClick={() => { setMenuOpen(false); setEditOpen(true); }}
+                              className="w-full flex items-center gap-2.5 px-4 py-3 text-sm text-[#C9D5E8] hover:bg-[#1E2535] hover:text-[#f3f2f2] transition-colors text-left"
                             >
-                              Cancelar
+                              <Edit3 size={13} className="text-[#3B82F6]" />
+                              Editar publicación
                             </button>
                             <button
-                              onClick={() => { setMenuOpen(false); setConfirmDelete(false); handleDelete(); }}
-                              disabled={deletePost.isPending}
-                              className="flex-1 py-1.5 rounded-lg text-xs font-bold bg-[#EF4444] text-white hover:bg-[#DC2626] transition-all disabled:opacity-50"
+                              onClick={() => setConfirmDelete(true)}
+                              className="w-full flex items-center gap-2.5 px-4 py-3 text-sm text-[#EF4444] hover:bg-[#EF4444]/10 transition-colors text-left border-t border-[#1E2535]"
                             >
-                              Eliminar
+                              <Trash2 size={13} />
+                              Eliminar publicación
                             </button>
+                          </>
+                        ) : (
+                          <div className="px-4 py-3 space-y-2">
+                            <p className="text-xs text-[#C9D5E8] font-medium">¿Eliminar este post?</p>
+                            <div className="flex gap-2">
+                              <button
+                                onClick={() => setConfirmDelete(false)}
+                                className="flex-1 py-1.5 rounded-lg text-xs font-semibold text-[#8B9AB0] hover:text-[#f3f2f2] hover:bg-[#1E2535] transition-all"
+                              >
+                                Cancelar
+                              </button>
+                              <button
+                                onClick={() => { setMenuOpen(false); setConfirmDelete(false); handleDelete(); }}
+                                disabled={deletePost.isPending}
+                                className="flex-1 py-1.5 rounded-lg text-xs font-bold bg-[#EF4444] text-white hover:bg-[#DC2626] transition-all disabled:opacity-50"
+                              >
+                                Eliminar
+                              </button>
+                            </div>
                           </div>
-                        </div>
+                        )
+                      ) : (
+                        <button
+                          onClick={() => { setMenuOpen(false); setReportOpen(true); }}
+                          className="w-full flex items-center gap-2.5 px-4 py-3 text-sm text-[#F97316] hover:bg-[#F97316]/10 transition-colors text-left"
+                        >
+                          <Flag size={13} />
+                          Reportar publicación
+                        </button>
                       )}
                     </div>
                   </>
@@ -221,7 +251,7 @@ export default function PostCard({ post, addToast, isSaved = false, onToggleSave
 
           {/* Content */}
           <p className="text-[#C9D5E8] text-[15px] leading-relaxed whitespace-pre-wrap mb-3">
-            {localPost.content}
+            {renderContent(localPost.content)}
           </p>
 
           {/* Code Block */}
@@ -427,6 +457,46 @@ export default function PostCard({ post, addToast, isSaved = false, onToggleSave
           }}
           addToast={addToast}
         />
+      )}
+      {reportOpen && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center p-4"
+          style={{ background: 'rgba(0,0,0,0.75)' }}
+          onClick={(e) => { if (e.target === e.currentTarget) setReportOpen(false); }}
+        >
+          <div className="w-full max-w-sm bg-[#0D1117] border border-[#2A3347] rounded-2xl overflow-hidden shadow-2xl">
+            <div className="px-5 py-4 border-b border-[#2A3347]">
+              <h3 className="text-[#f3f2f2] font-bold">Reportar publicación</h3>
+              <p className="text-[#5A6680] text-xs mt-0.5">Cuéntanos qué está mal con esta publicación</p>
+            </div>
+            <div className="px-5 py-4">
+              <textarea
+                value={reportReason}
+                onChange={(e) => setReportReason(e.target.value)}
+                rows={3}
+                maxLength={500}
+                placeholder="Describe el problema..."
+                className="w-full bg-[#060911] border border-[#2A3347] focus:border-[#F97316]/50 text-[#f3f2f2] px-3 py-2.5 rounded-xl text-sm outline-none placeholder:text-[#3A4660] transition-colors resize-none"
+              />
+              <p className="text-[#3A4660] text-xs mt-1 text-right">{reportReason.length}/500</p>
+            </div>
+            <div className="flex gap-3 px-5 pb-5">
+              <button
+                onClick={() => { setReportOpen(false); setReportReason(''); }}
+                className="flex-1 px-4 py-2.5 border border-[#2A3347] text-[#8B9AB0] text-sm font-semibold rounded-xl hover:bg-[#1E2535] transition-colors"
+              >
+                Cancelar
+              </button>
+              <button
+                onClick={() => createReport.mutate({ postId: localPost.id, reason: reportReason.trim() || 'Sin razón especificada' })}
+                disabled={createReport.isPending}
+                className="flex-1 px-4 py-2.5 bg-[#F97316] text-white text-sm font-bold rounded-xl hover:bg-[#EA580C] disabled:opacity-50 transition-colors"
+              >
+                {createReport.isPending ? 'Enviando...' : 'Reportar'}
+              </button>
+            </div>
+          </div>
+        </div>
       )}
     </article>
   );

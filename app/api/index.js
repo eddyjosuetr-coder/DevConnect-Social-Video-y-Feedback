@@ -33468,10 +33468,11 @@ __export(schema_exports, {
   notifications: () => notifications,
   postLikes: () => postLikes,
   posts: () => posts,
+  reports: () => reports,
   reposts: () => reposts,
   users: () => users
 });
-var users, posts, postLikes, comments, reposts, messages, notifications, bookmarks, commentLikes, follows;
+var users, posts, postLikes, comments, reposts, messages, notifications, bookmarks, commentLikes, follows, reports;
 var init_schema2 = __esm({
   "db/schema.ts"() {
     init_mysql_core();
@@ -33483,6 +33484,9 @@ var init_schema2 = __esm({
       avatar: mediumtext("avatar"),
       bio: text("bio"),
       banner: mediumtext("banner"),
+      website: varchar("website", { length: 255 }),
+      githubUrl: varchar("githubUrl", { length: 255 }),
+      location: varchar("location", { length: 100 }),
       role: mysqlEnum("role", ["user", "admin"]).default("user").notNull(),
       createdAt: timestamp("createdAt").defaultNow().notNull(),
       updatedAt: timestamp("updatedAt").defaultNow().notNull().$onUpdate(() => /* @__PURE__ */ new Date()),
@@ -33540,7 +33544,7 @@ var init_schema2 = __esm({
       id: serial("id").primaryKey(),
       recipientId: bigint("recipientId", { mode: "number", unsigned: true }).notNull(),
       actorId: bigint("actorId", { mode: "number", unsigned: true }).notNull(),
-      type: mysqlEnum("type", ["like", "comment", "repost", "follow"]).notNull(),
+      type: mysqlEnum("type", ["like", "comment", "repost", "follow", "mention"]).notNull(),
       postId: bigint("postId", { mode: "number", unsigned: true }),
       readAt: timestamp("readAt"),
       createdAt: timestamp("createdAt").defaultNow().notNull()
@@ -33569,6 +33573,15 @@ var init_schema2 = __esm({
     }, (table) => ({
       uniqueFollow: uniqueIndex("follows_follower_following_idx").on(table.followerId, table.followingId)
     }));
+    reports = mysqlTable("reports", {
+      id: serial("id").primaryKey(),
+      reporterId: bigint("reporterId", { mode: "number", unsigned: true }).notNull(),
+      postId: bigint("postId", { mode: "number", unsigned: true }),
+      targetUserId: bigint("targetUserId", { mode: "number", unsigned: true }),
+      reason: varchar("reason", { length: 500 }).notNull(),
+      status: mysqlEnum("status", ["pending", "resolved"]).default("pending").notNull(),
+      createdAt: timestamp("createdAt").defaultNow().notNull()
+    });
   }
 });
 
@@ -33659,6 +33672,21 @@ function getDb() {
         UNIQUE KEY comment_likes_user_comment_idx (commentId, userId)
       )`);
       await run2("ALTER TABLE comments ADD COLUMN parentId BIGINT UNSIGNED NULL");
+      await run2("ALTER TABLE users ADD COLUMN website VARCHAR(255) NULL");
+      await run2("ALTER TABLE users ADD COLUMN githubUrl VARCHAR(255) NULL");
+      await run2("ALTER TABLE users ADD COLUMN location VARCHAR(100) NULL");
+      await run2("ALTER TABLE notifications MODIFY COLUMN type ENUM('like','comment','repost','follow','mention') NOT NULL");
+      await run2(`CREATE TABLE IF NOT EXISTS reports (
+        id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+        reporterId BIGINT UNSIGNED NOT NULL,
+        postId BIGINT UNSIGNED NULL,
+        targetUserId BIGINT UNSIGNED NULL,
+        reason VARCHAR(500) NOT NULL,
+        status ENUM('pending','resolved') NOT NULL DEFAULT 'pending',
+        createdAt TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        INDEX reports_reporter_idx (reporterId),
+        INDEX reports_post_idx (postId)
+      )`);
     })();
   }
   return instance;
@@ -48456,7 +48484,7 @@ var init_zod = __esm({
 });
 
 // contracts/schemas.ts
-var createPostSchema, toggleLikeSchema, isLikedSchema, deletePostSchema, updatePostSchema, listCommentsSchema, createCommentSchema, deleteCommentSchema, toggleRepostSchema, quoteRepostSchema, listRepostsByUserSchema, sendMessageSchema, getThreadSchema, markReadSchema, searchUsersSchema, toggleFollowSchema, isFollowingSchema, getUserProfileSchema, listPostsSchema, listPostsByUserSchema, updateProfileSchema, getPostSchema, listByTagSchema, toggleBookmarkSchema, listBookmarksSchema, getSuggestedUsersSchema, getTrendingTagsSchema, listFollowersSchema, toggleCommentLikeSchema, listRepliesSchema, searchPostsSchema;
+var createPostSchema, toggleLikeSchema, isLikedSchema, deletePostSchema, updatePostSchema, listCommentsSchema, createCommentSchema, deleteCommentSchema, toggleRepostSchema, quoteRepostSchema, listRepostsByUserSchema, sendMessageSchema, getThreadSchema, markReadSchema, searchUsersSchema, toggleFollowSchema, isFollowingSchema, getUserProfileSchema, listPostsSchema, listPostsByUserSchema, updateProfileSchema, getPostSchema, listByTagSchema, toggleBookmarkSchema, listBookmarksSchema, getSuggestedUsersSchema, getTrendingTagsSchema, listFollowersSchema, toggleCommentLikeSchema, listRepliesSchema, searchPostsSchema, createReportSchema, resolveReportSchema;
 var init_schemas3 = __esm({
   "contracts/schemas.ts"() {
     init_zod();
@@ -48504,7 +48532,10 @@ var init_schemas3 = __esm({
       name: external_exports.string().min(1).max(255).optional(),
       bio: external_exports.string().max(500).optional(),
       avatar: external_exports.string().max(6e5).optional(),
-      banner: external_exports.string().max(2e6).optional()
+      banner: external_exports.string().max(2e6).optional(),
+      website: external_exports.string().max(255).optional(),
+      githubUrl: external_exports.string().max(255).optional(),
+      location: external_exports.string().max(100).optional()
     });
     getPostSchema = external_exports.object({ postId: external_exports.number().int() });
     listByTagSchema = external_exports.object({ tag: external_exports.string().max(100) });
@@ -48516,6 +48547,12 @@ var init_schemas3 = __esm({
     toggleCommentLikeSchema = external_exports.object({ commentId: external_exports.number().int() });
     listRepliesSchema = external_exports.object({ commentId: external_exports.number().int() });
     searchPostsSchema = external_exports.object({ query: external_exports.string().max(100) });
+    createReportSchema = external_exports.object({
+      postId: external_exports.number().int().optional(),
+      targetUserId: external_exports.number().int().optional(),
+      reason: external_exports.string().min(1).max(500)
+    });
+    resolveReportSchema = external_exports.object({ reportId: external_exports.number().int() });
   }
 });
 
@@ -48647,6 +48684,33 @@ var init_users = __esm({
 });
 
 // server/queries/notifications.ts
+function extractMentions(content) {
+  const matches = content.match(/@([\wÀ-ɏ]+)/g) ?? [];
+  return [...new Set(matches.map((m) => m.slice(1).toLowerCase()))];
+}
+async function notifyMentions(content, actorId, postId) {
+  const names = extractMentions(content);
+  if (names.length === 0) return;
+  if (isMock3) {
+    for (const name of names) {
+      const found = [...mockUserById.values()].find(
+        (u) => u.name?.toLowerCase() === name
+      );
+      if (found && found.id !== actorId) {
+        void createNotification(actorId, found.id, "mention", postId);
+      }
+    }
+    return;
+  }
+  const db = getDb();
+  for (const name of names) {
+    const rows = await db.select({ id: users.id }).from(users).where(like(users.name, name)).limit(1);
+    const recipient = rows.at(0);
+    if (recipient && recipient.id !== actorId) {
+      void createNotification(actorId, recipient.id, "mention", postId);
+    }
+  }
+}
 async function createNotification(actorId, recipientId, type, postId) {
   if (actorId === recipientId) return;
   if (isMock3) {
@@ -48742,8 +48806,8 @@ var init_posts_router = __esm({
       listByUser: publicQuery.input(listPostsByUserSchema).query(
         ({ input }) => listPostsByUser(input.userId, input.viewerUserId)
       ),
-      create: authedQuery.input(createPostSchema).mutation(
-        ({ ctx, input }) => createPost({
+      create: authedQuery.input(createPostSchema).mutation(async ({ ctx, input }) => {
+        const result = await createPost({
           userId: ctx.user.id,
           content: input.content,
           code: input.code ?? null,
@@ -48753,8 +48817,10 @@ var init_posts_router = __esm({
           mediaType: input.mediaType ?? null,
           authorName: ctx.user.name ?? null,
           authorAvatar: ctx.user.avatar ?? null
-        })
-      ),
+        });
+        void notifyMentions(input.content, ctx.user.id, result.id);
+        return result;
+      }),
       toggleLike: authedQuery.input(toggleLikeSchema).mutation(async ({ ctx, input }) => {
         const result = await toggleLike(input.postId, ctx.user.id);
         if (result.liked && result.postOwnerId) {
@@ -48991,6 +49057,7 @@ var init_comments_router = __esm({
         if (result.postOwnerId && !input.parentId) {
           void createNotification(ctx.user.id, result.postOwnerId, "comment", input.postId);
         }
+        void notifyMentions(input.content, ctx.user.id, input.postId);
         return result;
       }),
       delete: authedQuery.input(deleteCommentSchema).mutation(
@@ -49309,6 +49376,10 @@ var init_users_router = __esm({
           bio: user.bio,
           avatar: user.avatar,
           banner: user.banner,
+          website: user.website ?? null,
+          githubUrl: user.githubUrl ?? null,
+          location: user.location ?? null,
+          role: user.role,
           createdAt: user.createdAt,
           followerCount,
           followingCount
@@ -49322,7 +49393,10 @@ var init_users_router = __esm({
           ...input.name !== void 0 ? { name: input.name } : {},
           ...input.bio !== void 0 ? { bio: input.bio } : {},
           ...input.avatar !== void 0 ? { avatar: input.avatar } : {},
-          ...input.banner !== void 0 ? { banner: input.banner } : {}
+          ...input.banner !== void 0 ? { banner: input.banner } : {},
+          ...input.website !== void 0 ? { website: input.website } : {},
+          ...input.githubUrl !== void 0 ? { githubUrl: input.githubUrl } : {},
+          ...input.location !== void 0 ? { location: input.location } : {}
         });
         return { success: true };
       }),
@@ -49576,6 +49650,90 @@ var init_bookmarks_router = __esm({
   }
 });
 
+// server/queries/reports.ts
+async function createReport(data) {
+  if (isMock9) {
+    mockReports.push({
+      id: nextReportId++,
+      reporterId: data.reporterId,
+      postId: data.postId ?? null,
+      targetUserId: data.targetUserId ?? null,
+      reason: data.reason,
+      status: "pending",
+      createdAt: /* @__PURE__ */ new Date()
+    });
+    return { success: true };
+  }
+  const db = getDb();
+  await db.insert(reports).values({
+    reporterId: data.reporterId,
+    postId: data.postId ?? null,
+    targetUserId: data.targetUserId ?? null,
+    reason: data.reason
+  });
+  return { success: true };
+}
+async function listReports() {
+  if (isMock9) return [...mockReports].reverse();
+  const db = getDb();
+  const rows = await db.select().from(reports).orderBy(desc(reports.createdAt)).limit(100);
+  return rows;
+}
+async function resolveReport(reportId) {
+  if (isMock9) {
+    const r = mockReports.find((r2) => r2.id === reportId);
+    if (r) r.status = "resolved";
+    return { success: true };
+  }
+  const db = getDb();
+  await db.update(reports).set({ status: "resolved" }).where(eq(reports.id, reportId));
+  return { success: true };
+}
+var isMock9, mockReports, nextReportId;
+var init_reports = __esm({
+  "server/queries/reports.ts"() {
+    init_drizzle_orm();
+    init_connection();
+    init_schema2();
+    isMock9 = !process.env.DATABASE_URL;
+    mockReports = [];
+    nextReportId = 1;
+  }
+});
+
+// server/reports-router.ts
+var reportsRouter;
+var init_reports_router = __esm({
+  "server/reports-router.ts"() {
+    init_middleware();
+    init_reports();
+    init_schemas3();
+    init_dist2();
+    reportsRouter = createRouter({
+      create: authedQuery.input(createReportSchema).mutation(
+        ({ ctx, input }) => createReport({
+          reporterId: ctx.user.id,
+          postId: input.postId ?? null,
+          targetUserId: input.targetUserId ?? null,
+          reason: input.reason
+        })
+      ),
+      list: authedQuery.query(({ ctx }) => {
+        if (ctx.user.role !== "admin") {
+          throw new TRPCError({ code: "FORBIDDEN", message: "Solo administradores" });
+        }
+        return listReports();
+      }),
+      resolve: authedQuery.input(resolveReportSchema).mutation(({ ctx, input }) => {
+        if (ctx.user.role !== "admin") {
+          throw new TRPCError({ code: "FORBIDDEN", message: "Solo administradores" });
+        }
+        return resolveReport(input.reportId);
+      })
+    });
+  }
+});
+
 // server/router.ts
 var appRouter;
 var init_router5 = __esm({
@@ -49589,6 +49747,7 @@ var init_router5 = __esm({
     init_messages_router();
     init_notifications_router();
     init_bookmarks_router();
+    init_reports_router();
     init_middleware();
     appRouter = createRouter({
       ping: publicQuery.query(() => ({ ok: true, ts: Date.now() })),
@@ -49600,7 +49759,8 @@ var init_router5 = __esm({
       users: usersRouter,
       messages: messagesRouter,
       notifications: notificationsRouter,
-      bookmarks: bookmarksRouter
+      bookmarks: bookmarksRouter,
+      reports: reportsRouter
     });
   }
 });

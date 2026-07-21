@@ -15,6 +15,7 @@ import NotificationsTab from '@/components/dashboard/NotificationsTab';
 import MessagesTab from '@/components/dashboard/MessagesTab';
 import BookmarksTab from '@/components/dashboard/BookmarksTab';
 import ProfileTab from '@/components/dashboard/ProfileTab';
+import AdminPanel from '@/components/dashboard/AdminPanel';
 import type { ActiveTab } from '@/components/dashboard/types';
 
 const TAB_LABELS: Record<ActiveTab, string> = {
@@ -24,6 +25,7 @@ const TAB_LABELS: Record<ActiveTab, string> = {
   messages:      'Mensajes',
   bookmarks:     'Guardados',
   profile:       'Perfil',
+  admin:         'Panel Admin',
 };
 
 const PAGE_SIZE = 10;
@@ -275,6 +277,9 @@ export default function Dashboard() {
               addToast={addToast}
             />
           )}
+
+          {/* ── ADMIN TAB ────────────────────────────────────── */}
+          {activeTab === 'admin' && user.role === 'admin' && <AdminPanel />}
         </div>
       </main>
 

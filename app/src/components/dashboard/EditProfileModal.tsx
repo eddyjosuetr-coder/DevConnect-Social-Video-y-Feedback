@@ -1,5 +1,5 @@
 import { useState, useRef, useCallback } from 'react';
-import { X, Camera, Loader2 } from 'lucide-react';
+import { X, Camera, Loader2, Globe, Github, MapPin } from 'lucide-react';
 import { trpc } from '@/providers/trpc';
 import type { User } from '@db/schema';
 import type { Toast } from '@/hooks/useToast';
@@ -33,13 +33,19 @@ function compressImage(file: File, maxPx: number, quality = 0.85): Promise<strin
   });
 }
 
+type ExtendedUser = User & { website?: string | null; githubUrl?: string | null; location?: string | null; banner?: string | null };
+
 export default function EditProfileModal({ user, onClose, addToast }: EditProfileModalProps) {
-  const [name,             setName]             = useState(user.name   ?? '');
-  const [bio,              setBio]              = useState(user.bio    ?? '');
-  const [avatarPreview,    setAvatarPreview]    = useState<string | null>((user as User & { avatar?: string | null }).avatar ?? null);
-  const [bannerPreview,    setBannerPreview]    = useState<string | null>((user as User & { banner?: string | null }).banner ?? null);
-  const [newAvatarData,    setNewAvatarData]    = useState<string | undefined>(undefined);
-  const [newBannerData,    setNewBannerData]    = useState<string | undefined>(undefined);
+  const extUser = user as ExtendedUser;
+  const [name,          setName]          = useState(extUser.name      ?? '');
+  const [bio,           setBio]           = useState(extUser.bio       ?? '');
+  const [website,       setWebsite]       = useState(extUser.website   ?? '');
+  const [githubUrl,     setGithubUrl]     = useState(extUser.githubUrl ?? '');
+  const [location,      setLocation]      = useState(extUser.location  ?? '');
+  const [avatarPreview, setAvatarPreview] = useState<string | null>(extUser.avatar ?? null);
+  const [bannerPreview, setBannerPreview] = useState<string | null>(extUser.banner ?? null);
+  const [newAvatarData, setNewAvatarData] = useState<string | undefined>(undefined);
+  const [newBannerData, setNewBannerData] = useState<string | undefined>(undefined);
   const avatarInputRef = useRef<HTMLInputElement>(null);
   const bannerInputRef = useRef<HTMLInputElement>(null);
   const utils = trpc.useUtils();
@@ -80,10 +86,13 @@ export default function EditProfileModal({ user, onClose, addToast }: EditProfil
       return;
     }
     mutation.mutate({
-      name:   name.trim(),
-      bio:    bio.trim() || undefined,
-      avatar: newAvatarData,
-      banner: newBannerData,
+      name:      name.trim(),
+      bio:       bio.trim() || undefined,
+      avatar:    newAvatarData,
+      banner:    newBannerData,
+      website:   website.trim() || undefined,
+      githubUrl: githubUrl.trim() || undefined,
+      location:  location.trim() || undefined,
     });
   };
 
@@ -216,6 +225,60 @@ export default function EditProfileModal({ user, onClose, addToast }: EditProfil
               placeholder="Cuéntanos algo sobre ti..."
               className="w-full bg-[#060911] border border-[#2A3347] focus:border-[#e1ff00]/50 text-[#f3f2f2] px-4 py-2.5 rounded-xl text-sm outline-none placeholder:text-[#3A4660] transition-colors resize-none"
             />
+          </div>
+
+          {/* Website */}
+          <div>
+            <label className="block text-xs font-semibold text-[#5A6680] uppercase tracking-wider mb-1.5">
+              Sitio web
+            </label>
+            <div className="relative">
+              <Globe size={14} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-[#3A4660]" />
+              <input
+                type="url"
+                value={website}
+                onChange={(e) => setWebsite(e.target.value)}
+                maxLength={255}
+                placeholder="https://tu-sitio.com"
+                className="w-full bg-[#060911] border border-[#2A3347] focus:border-[#e1ff00]/50 text-[#f3f2f2] pl-9 pr-4 py-2.5 rounded-xl text-sm outline-none placeholder:text-[#3A4660] transition-colors"
+              />
+            </div>
+          </div>
+
+          {/* GitHub */}
+          <div>
+            <label className="block text-xs font-semibold text-[#5A6680] uppercase tracking-wider mb-1.5">
+              GitHub
+            </label>
+            <div className="relative">
+              <Github size={14} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-[#3A4660]" />
+              <input
+                type="text"
+                value={githubUrl}
+                onChange={(e) => setGithubUrl(e.target.value)}
+                maxLength={255}
+                placeholder="github.com/tu-usuario"
+                className="w-full bg-[#060911] border border-[#2A3347] focus:border-[#e1ff00]/50 text-[#f3f2f2] pl-9 pr-4 py-2.5 rounded-xl text-sm outline-none placeholder:text-[#3A4660] transition-colors"
+              />
+            </div>
+          </div>
+
+          {/* Location */}
+          <div>
+            <label className="block text-xs font-semibold text-[#5A6680] uppercase tracking-wider mb-1.5">
+              Ubicación
+            </label>
+            <div className="relative">
+              <MapPin size={14} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-[#3A4660]" />
+              <input
+                type="text"
+                value={location}
+                onChange={(e) => setLocation(e.target.value)}
+                maxLength={100}
+                placeholder="Ciudad, País"
+                className="w-full bg-[#060911] border border-[#2A3347] focus:border-[#e1ff00]/50 text-[#f3f2f2] pl-9 pr-4 py-2.5 rounded-xl text-sm outline-none placeholder:text-[#3A4660] transition-colors"
+              />
+            </div>
           </div>
         </div>
 

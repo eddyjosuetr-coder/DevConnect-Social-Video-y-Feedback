@@ -54,10 +54,13 @@ export const listPostsSchema = z.object({ viewerUserId: z.number().int().optiona
 export const listPostsByUserSchema = z.object({ userId: z.number().int(), viewerUserId: z.number().int().optional() });
 
 export const updateProfileSchema = z.object({
-  name:   z.string().min(1).max(255).optional(),
-  bio:    z.string().max(500).optional(),
-  avatar: z.string().max(600000).optional(),
-  banner: z.string().max(2000000).optional(),
+  name:      z.string().min(1).max(255).optional(),
+  bio:       z.string().max(500).optional(),
+  avatar:    z.string().max(600000).optional(),
+  banner:    z.string().max(2000000).optional(),
+  website:   z.string().max(255).optional(),
+  githubUrl: z.string().max(255).optional(),
+  location:  z.string().max(100).optional(),
 });
 
 export const getPostSchema = z.object({ postId: z.number().int() });
@@ -73,3 +76,9 @@ export const listFollowersSchema = z.object({ userId: z.number().int() });
 export const toggleCommentLikeSchema = z.object({ commentId: z.number().int() });
 export const listRepliesSchema = z.object({ commentId: z.number().int() });
 export const searchPostsSchema = z.object({ query: z.string().max(100) });
+export const createReportSchema = z.object({
+  postId:       z.number().int().optional(),
+  targetUserId: z.number().int().optional(),
+  reason:       z.string().min(1).max(500),
+});
+export const resolveReportSchema = z.object({ reportId: z.number().int() });

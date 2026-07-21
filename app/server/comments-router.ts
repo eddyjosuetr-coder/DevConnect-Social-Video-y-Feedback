@@ -1,7 +1,7 @@
 import { createRouter, publicQuery, authedQuery } from "./middleware";
 import { listComments, listReplies, createComment, deleteComment, toggleCommentLike } from "./queries/comments";
 import { listCommentsSchema, listRepliesSchema, createCommentSchema, deleteCommentSchema, toggleCommentLikeSchema } from "@contracts/schemas";
-import { createNotification } from "./queries/notifications";
+import { createNotification, notifyMentions } from "./queries/notifications";
 
 export const commentsRouter = createRouter({
   list: publicQuery.input(listCommentsSchema).query(({ ctx, input }) =>
@@ -24,6 +24,7 @@ export const commentsRouter = createRouter({
     if (result.postOwnerId && !input.parentId) {
       void createNotification(ctx.user.id, result.postOwnerId, "comment", input.postId);
     }
+    void notifyMentions(input.content, ctx.user.id, input.postId);
     return result;
   }),
 

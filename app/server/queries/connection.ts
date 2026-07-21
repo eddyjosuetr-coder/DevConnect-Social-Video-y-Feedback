@@ -93,6 +93,21 @@ export function getDb() {
         UNIQUE KEY comment_likes_user_comment_idx (commentId, userId)
       )`);
       await run("ALTER TABLE comments ADD COLUMN parentId BIGINT UNSIGNED NULL");
+      await run("ALTER TABLE users ADD COLUMN website VARCHAR(255) NULL");
+      await run("ALTER TABLE users ADD COLUMN githubUrl VARCHAR(255) NULL");
+      await run("ALTER TABLE users ADD COLUMN location VARCHAR(100) NULL");
+      await run("ALTER TABLE notifications MODIFY COLUMN type ENUM('like','comment','repost','follow','mention') NOT NULL");
+      await run(`CREATE TABLE IF NOT EXISTS reports (
+        id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+        reporterId BIGINT UNSIGNED NOT NULL,
+        postId BIGINT UNSIGNED NULL,
+        targetUserId BIGINT UNSIGNED NULL,
+        reason VARCHAR(500) NOT NULL,
+        status ENUM('pending','resolved') NOT NULL DEFAULT 'pending',
+        createdAt TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        INDEX reports_reporter_idx (reporterId),
+        INDEX reports_post_idx (postId)
+      )`);
     })();
   }
   return instance;

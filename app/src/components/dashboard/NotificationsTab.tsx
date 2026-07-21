@@ -1,16 +1,17 @@
 import { useEffect } from 'react';
-import { Bell, Heart, MessageCircle, UserPlus, Repeat2 } from 'lucide-react';
+import { Bell, Heart, MessageCircle, UserPlus, Repeat2, AtSign } from 'lucide-react';
 import { trpc } from '@/providers/trpc';
 import { formatDate } from '@/lib/utils';
 import { useNavigate } from 'react-router';
 
-type NotifType = 'like' | 'comment' | 'repost' | 'follow';
+type NotifType = 'like' | 'comment' | 'repost' | 'follow' | 'mention';
 
 const ICON_MAP: Record<NotifType, React.ElementType> = {
   like:    Heart,
   comment: MessageCircle,
   follow:  UserPlus,
   repost:  Repeat2,
+  mention: AtSign,
 };
 
 const COLOR_MAP: Record<NotifType, string> = {
@@ -18,6 +19,7 @@ const COLOR_MAP: Record<NotifType, string> = {
   comment: 'text-[#3B82F6] bg-[#3B82F6]/10',
   follow:  'text-[#22C55E] bg-[#22C55E]/10',
   repost:  'text-[#A855F7] bg-[#A855F7]/10',
+  mention: 'text-[#e1ff00] bg-[#e1ff00]/10',
 };
 
 const ACTION_TEXT: Record<NotifType, string> = {
@@ -25,6 +27,7 @@ const ACTION_TEXT: Record<NotifType, string> = {
   comment: 'comentó en tu publicación',
   repost:  'reposteó tu publicación',
   follow:  'comenzó a seguirte',
+  mention: 'te mencionó en una publicación',
 };
 
 export default function NotificationsTab() {

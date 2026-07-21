@@ -19,6 +19,9 @@ export const users = mysqlTable("users", {
   avatar: mediumtext("avatar"),
   bio: text("bio"),
   banner: mediumtext("banner"),
+  website: varchar("website", { length: 255 }),
+  githubUrl: varchar("githubUrl", { length: 255 }),
+  location: varchar("location", { length: 100 }),
   role: mysqlEnum("role", ["user", "admin"]).default("user").notNull(),
   createdAt: timestamp("createdAt").defaultNow().notNull(),
   updatedAt: timestamp("updatedAt").defaultNow().notNull().$onUpdate(() => new Date()),
@@ -92,7 +95,7 @@ export const notifications = mysqlTable("notifications", {
   id: serial("id").primaryKey(),
   recipientId: bigint("recipientId", { mode: "number", unsigned: true }).notNull(),
   actorId: bigint("actorId", { mode: "number", unsigned: true }).notNull(),
-  type: mysqlEnum("type", ["like", "comment", "repost", "follow"]).notNull(),
+  type: mysqlEnum("type", ["like", "comment", "repost", "follow", "mention"]).notNull(),
   postId: bigint("postId", { mode: "number", unsigned: true }),
   readAt: timestamp("readAt"),
   createdAt: timestamp("createdAt").defaultNow().notNull(),
@@ -127,3 +130,14 @@ export const follows = mysqlTable("follows", {
 }, (table) => ({
   uniqueFollow: uniqueIndex("follows_follower_following_idx").on(table.followerId, table.followingId),
 }));
+
+// ── Reports ──
+export const reports = mysqlTable("reports", {
+  id: serial("id").primaryKey(),
+  reporterId: bigint("reporterId", { mode: "number", unsigned: true }).notNull(),
+  postId: bigint("postId", { mode: "number", unsigned: true }),
+  targetUserId: bigint("targetUserId", { mode: "number", unsigned: true }),
+  reason: varchar("reason", { length: 500 }).notNull(),
+  status: mysqlEnum("status", ["pending", "resolved"]).default("pending").notNull(),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+});

@@ -1,7 +1,7 @@
 import { createRouter, publicQuery, authedQuery } from "./middleware";
 import { listPosts, listPostsByUser, createPost, toggleLike, isLiked, deletePost, updatePost, listFeed, getPostById, listPostsByTag, searchPosts } from "./queries/posts";
 import { listPostsSchema, createPostSchema, toggleLikeSchema, isLikedSchema, deletePostSchema, listPostsByUserSchema, updatePostSchema, getPostSchema, listByTagSchema, searchPostsSchema } from "@contracts/schemas";
-import { createNotification } from "./queries/notifications";
+import { createNotification, notifyMentions } from "./queries/notifications";
 
 export const postsRouter = createRouter({
   list: publicQuery.input(listPostsSchema).query(({ input }) => listPosts(input?.viewerUserId)),
@@ -10,8 +10,8 @@ export const postsRouter = createRouter({
     listPostsByUser(input.userId, input.viewerUserId)
   ),
 
-  create: authedQuery.input(createPostSchema).mutation(({ ctx, input }) =>
-    createPost({
+  create: authedQuery.input(createPostSchema).mutation(async ({ ctx, input }) => {
+    const result = await createPost({
       userId: ctx.user.id,
       content: input.content,
       code: input.code ?? null,
@@ -21,8 +21,10 @@ export const postsRouter = createRouter({
       mediaType: input.mediaType ?? null,
       authorName: ctx.user.name ?? null,
       authorAvatar: ctx.user.avatar ?? null,
-    })
-  ),
+    });
+    void notifyMentions(input.content, ctx.user.id, result.id);
+    return result;
+  }),
 
   toggleLike: authedQuery.input(toggleLikeSchema).mutation(async ({ ctx, input }) => {
     const result = await toggleLike(input.postId, ctx.user.id);

@@ -7,6 +7,7 @@ import { usersRouter } from "./users-router";
 import { messagesRouter } from "./messages-router";
 import { notificationsRouter } from "./notifications-router";
 import { bookmarksRouter } from "./bookmarks-router";
+import { reportsRouter } from "./reports-router";
 import { createRouter, publicQuery } from "./middleware";
 
 export const appRouter = createRouter({
@@ -20,6 +21,7 @@ export const appRouter = createRouter({
   messages: messagesRouter,
   notifications: notificationsRouter,
   bookmarks: bookmarksRouter,
+  reports: reportsRouter,
 });
 
 export type AppRouter = typeof appRouter;

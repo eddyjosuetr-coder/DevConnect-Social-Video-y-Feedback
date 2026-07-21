@@ -18,6 +18,10 @@ export const usersRouter = createRouter({
       bio: user.bio,
       avatar: user.avatar,
       banner: user.banner,
+      website: user.website ?? null,
+      githubUrl: user.githubUrl ?? null,
+      location: user.location ?? null,
+      role: user.role,
       createdAt: user.createdAt,
       followerCount,
       followingCount,
@@ -32,10 +36,13 @@ export const usersRouter = createRouter({
     .input(updateProfileSchema)
     .mutation(async ({ ctx, input }) => {
       await updateUserProfile(ctx.user.id, {
-        ...(input.name   !== undefined ? { name: input.name }     : {}),
-        ...(input.bio    !== undefined ? { bio: input.bio }       : {}),
-        ...(input.avatar !== undefined ? { avatar: input.avatar } : {}),
-        ...(input.banner !== undefined ? { banner: input.banner } : {}),
+        ...(input.name      !== undefined ? { name: input.name }           : {}),
+        ...(input.bio       !== undefined ? { bio: input.bio }             : {}),
+        ...(input.avatar    !== undefined ? { avatar: input.avatar }       : {}),
+        ...(input.banner    !== undefined ? { banner: input.banner }       : {}),
+        ...(input.website   !== undefined ? { website: input.website }     : {}),
+        ...(input.githubUrl !== undefined ? { githubUrl: input.githubUrl } : {}),
+        ...(input.location  !== undefined ? { location: input.location }   : {}),
       });
       return { success: true };
     }),

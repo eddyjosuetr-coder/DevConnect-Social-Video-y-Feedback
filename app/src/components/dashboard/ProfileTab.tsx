@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Calendar, Code2, Heart, MessageCircle, Verified, Repeat2, Users } from 'lucide-react';
+import { Calendar, Code2, Heart, MessageCircle, Verified, Repeat2, Users, Globe, Github, MapPin, ShieldCheck } from 'lucide-react';
 import PostCard from './PostCard';
 import SharedPostCard from './SharedPostCard';
 import EditProfileModal from './EditProfileModal';
@@ -84,9 +84,15 @@ export default function ProfileTab({ user, savedPostIds, onToggleSave, addToast 
 
         {/* Name + handle */}
         <div className="mb-3">
-          <div className="flex items-center gap-1.5">
+          <div className="flex items-center gap-1.5 flex-wrap">
             <h2 className="text-[#f3f2f2] font-bold text-xl">{user.name ?? 'Developer'}</h2>
             <Verified size={18} className="text-[#3B82F6]" />
+            {profile?.role === 'admin' && (
+              <span className="flex items-center gap-1 text-xs font-bold text-[#e1ff00] bg-[#e1ff00]/10 border border-[#e1ff00]/20 px-2 py-0.5 rounded-full">
+                <ShieldCheck size={11} />
+                Admin
+              </span>
+            )}
           </div>
           <p className="text-[#5A6680] text-sm">@{handle}</p>
         </div>
@@ -95,11 +101,41 @@ export default function ProfileTab({ user, savedPostIds, onToggleSave, addToast 
         <p className="text-[#8B9AB0] text-sm mb-3 leading-relaxed">{bioText}</p>
 
         {/* Meta */}
-        <div className="flex items-center gap-4 text-xs text-[#5A6680] mb-4">
+        <div className="flex flex-wrap items-center gap-x-4 gap-y-1.5 text-xs text-[#5A6680] mb-4">
           <span className="flex items-center gap-1.5">
             <Calendar size={12} />
             Se unió en {joinedDate}
           </span>
+          {profile?.location && (
+            <span className="flex items-center gap-1.5">
+              <MapPin size={12} />
+              {profile.location}
+            </span>
+          )}
+          {profile?.website && (
+            <a
+              href={profile.website.startsWith('http') ? profile.website : `https://${profile.website}`}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="flex items-center gap-1.5 text-[#3B82F6] hover:underline"
+              onClick={(e) => e.stopPropagation()}
+            >
+              <Globe size={12} />
+              {profile.website.replace(/^https?:\/\//, '')}
+            </a>
+          )}
+          {profile?.githubUrl && (
+            <a
+              href={profile.githubUrl.startsWith('http') ? profile.githubUrl : `https://${profile.githubUrl}`}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="flex items-center gap-1.5 hover:text-[#f3f2f2] transition-colors"
+              onClick={(e) => e.stopPropagation()}
+            >
+              <Github size={12} />
+              {profile.githubUrl.replace(/^https?:\/\/(www\.)?github\.com\//, '')}
+            </a>
+          )}
         </div>
 
         {/* Stats */}
